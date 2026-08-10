@@ -66,6 +66,9 @@ def _define_tools() -> None:
           {"type": "object", "properties": {"media": {"type": "string"}, "video": {"type": "string"},
            "srt": {"type": "string"}, "out": {"type": "string"}, "action": {"type": "string"}},
            "required": ["action"]})
+    _tool("video_model", "プロンプトから最適なモデリング手法(CAD/OpenSCAD/FreeCAD/gen3d/Blender)を選択し3D生成",
+          {"type": "object", "properties": {"prompt": {"type": "string"}, "tool": {"type": "string"}},
+           "required": ["prompt"]})
     _tool("video_check", "セットアップ検証", {"type": "object", "properties": {}})
 
 
@@ -127,6 +130,13 @@ def _call_tool(name: str, arguments: dict) -> dict:
                        video=str(arguments.get("video", "")), srt=str(arguments.get("srt", "")),
                        out=str(arguments.get("out", "output/subtitle.srt")))
         return {"ok": res.ok, "data": res.data, "error": res.error}
+    if name == "video_model":
+        from core import model_router
+        prompt = str(arguments.get("prompt", ""))
+        tool = str(arguments.get("tool", "") or "") or None
+        routed = model_router.route(prompt)
+        result = model_router.build_asset(prompt, tool=tool)
+        return {"ok": result["ok"], "data": {"routed": routed, "result": result}}
     if name == "video_check":
         import subprocess
         r = subprocess.run([sys.executable, os.path.join(ROOT, "run.py"), "check"],

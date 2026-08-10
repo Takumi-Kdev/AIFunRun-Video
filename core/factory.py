@@ -233,20 +233,32 @@ def run(instruction: str, template: str | None = None,
 
     # ---- 3D資産 ----
     if "assets" in steps:
-        ref_img = _make_ref_image(out_dir / "ref.png")
-        res = _guarded_call(lambda: reg.call("gen3d", action="generate", image=ref_img or "",
-                                             topic=title, out_dir=str(out_dir / "3d")), "assets")
-        if res is not None and res.ok:
-            _add("assets", True, f"3D資産: {res.data.get('glb')}", tool="gen3d")
-        elif res is not None:
-            placeholder = res.data.get("placeholder_script") if res.data else None
-            if placeholder:
-                sf = out_dir / "gen3d_placeholder.py"
-                sf.write_text(placeholder, encoding="utf-8")
-                _add("assets", False, f"3D資産フォールバック: {res.error}", artifact=sf, tool="gen3d")
+        # モデリングツール振り分けルーターで最適な手法を選択（CAD/gen3d/Blender）
+        try:
+            from core import model_router as _mr
+            r = _mr.build_asset(title, out_dir=str(out_dir / "3d"))
+            tool = r.get("tool", "gen3d")
+            if r.get("ok") and r.get("artifacts"):
+                for a in r["artifacts"]:
+                    _add("assets", True, f"3D資産[{tool}]: {a.split('/')[-1]}", artifact=a, tool=tool)
             else:
-                _add("assets", False, f"3D資産なし: {res.error}", tool="gen3d")
-        # res is None → タイムアウト等で _add 済み
+                _add("assets", False, f"3D資産[{tool}] {r.get('detail','')}", tool=tool)
+        except Exception as exc:  # noqa: BLE001
+            # フォールバック: gen3d 直接（従来経路）
+            ref_img = _make_ref_image(out_dir / "ref.png")
+            res = _guarded_call(lambda: reg.call("gen3d", action="generate", image=ref_img or "",
+                                                 topic=title, out_dir=str(out_dir / "3d")), "assets")
+            if res is not None and res.ok:
+                _add("assets", True, f"3D資産: {res.data.get('glb')}", tool="gen3d")
+            elif res is not None:
+                placeholder = res.data.get("placeholder_script") if res.data else None
+                if placeholder:
+                    sf = out_dir / "gen3d_placeholder.py"
+                    sf.write_text(placeholder, encoding="utf-8")
+                    _add("assets", False, f"3D資産フォールバック: {res.error}", artifact=sf, tool="gen3d")
+                else:
+                    _add("assets", False, f"3D資産なし: {res.error}", tool="gen3d")
+            write_log(f"[{pid}] model_router失敗→gen3dフォールバック: {exc}", "WARN")
 
     # ---- シーン・照明（プロンプト→多様なBlenderシーン） ----
     if "scene" in steps:

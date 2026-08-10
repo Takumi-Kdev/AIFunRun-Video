@@ -16,6 +16,7 @@
   python run.py image --prompt '...' --out img.png            # テキスト→画像
   python run.py thumbnail --video X --out t.jpg               # 動画からサムネ
   python run.py transcribe --media X --out s.srt              # 音声→字幕
+  python run.py model '歯車の3Dモデルを作って'                # 最適モデリング手法を選択し3D生成
 """
 from __future__ import annotations
 
@@ -155,6 +156,10 @@ def main(argv: list[str] | None = None) -> int:
     ptr.add_argument("--media", required=True)
     ptr.add_argument("--out", default="output/subtitle.srt")
 
+    pmd = sub.add_parser("model", help="プロンプト→最適モデリング手法で3D生成")
+    pmd.add_argument("prompt")
+    pmd.add_argument("--tool", help="強制指定: cad/openscad/freecad/gen3d/blender")
+
     args = p.parse_args(argv)
 
     if args.cmd == "factory":
@@ -233,6 +238,15 @@ def main(argv: list[str] | None = None) -> int:
         ok, msg = transcribe.transcribe(args.media, args.out)
         print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
         return 0 if ok else 1
+    elif args.cmd == "model":
+        from core import model_router
+        routed = model_router.route(args.prompt)
+        res = model_router.build_asset(args.prompt, tool=args.tool)
+        print(json.dumps({"routed": routed, "result": {"ok": res["ok"], "tool": res.get("tool"),
+                                                        "detail": res.get("detail"),
+                                                        "artifacts": res.get("artifacts", [])}},
+                          ensure_ascii=False, indent=2, default=str))
+        return 0 if res["ok"] else 1
     else:
         p.print_help()
         return 1

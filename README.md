@@ -13,6 +13,8 @@ MCP 経由で操作できます。
 - **工場型オーケストレーション**: plan → 3D資産 → Blenderシーン → レンダー → 音声 → 背景 → 編集 → BGM
 - **BlenderMCP 統合**: Blender をテキスト/コード駆動
 - **シーン演出エンジン**: プロンプトだけで多様な Blender シーンを自動生成
+- **CAD/パラメトリックモデリング**: OpenSCAD / FreeCAD で精密・工業的形状をテキスト駆動
+- **モデリング振り分けルーター**: プロンプトから最適な手法(CAD/gen3d/Blender)を自動選択
 - **BGM/画像/字幕**: Blender が苦手な分野をテキスト駆動で補完
 - **多トラック動画スタジオ**: アカウント × 路線 × タイプ を分離管理
 - **MCP サーバー**: opencode / Claude Code 等から操作可能
@@ -32,6 +34,7 @@ MCP 経由で操作できます。
 | **BlenderMCP アドオン** | 任意 | Blender をテキスト/LLM駆動 | 全OS |
 | **faster-whisper** | 任意 | 音声→字幕生成 | 全OS（pip） |
 | **GPU 3D生成**（TripoSR/TRELLIS/Hunyuan3D） | 任意 | テキスト→3D資産（GPUメインPC） | Linux/Windows |
+| **OpenSCAD / FreeCAD** | 任意 | 精密・パラメトリックCADモデリング | 全OS |
 | **TTS**（Piper/espeak-ng） | 任意 | ナレーション音声 | 全OS |
 
 > 必須は **Python + Git + ffmpeg + pip パッケージ** だけ。あとは任意で、無くても実動画は作れます。
@@ -153,6 +156,20 @@ pip install faster-whisper   # CPUで動作
 - **Piper**（Neural TTS・日本語可）: https://github.com/rhasspy/piper
 - **espeak-ng**（軽量）: `brew install espeak-ng` / `sudo apt install espeak-ng`
 
+### 5-5. OpenSCAD / FreeCAD（パラメトリックCADモデリング）
+精密・工業的な形状（歯車/筐体/ブラケット/花瓶/ノブ等）をテキストから生成します。
+- **OpenSCAD**（スクリプト→3D）:
+  - Linux: `sudo apt install openscad`
+  - macOS: `brew install --cask openscad`
+  - Windows: `winget install --id OpenSCAD.OpenSCAD -e`
+- **FreeCAD**（Python APIでパラメトリックソリッド）:
+  - Linux: `sudo apt install freecad`
+  - macOS: `brew install --cask freecad`
+  - Windows: `winget install --id FreeCAD.FreeCAD -e`
+
+→ `python3 run.py model "歯車の3Dモデル"` で、プロンプトから最適な手法を自動選択して3D生成。
+生成した STL は `cad to_blender` で Blender シーンに合成可能。
+
 ### 5-5. opencode（コーディングエージェント）
 ```bash
 # 任意のコードエージェント（opencode / Claude Code / Codex）
@@ -192,6 +209,15 @@ python3 run.py thumbnail --video out.mp4 --out th.jpg
 python3 run.py transcribe --media voice.wav --out sub.srt
 ```
 
+### CAD / モデリング振り分け
+```bash
+python3 run.py model "歯車の3Dモデル"          # → OpenSCADで歯車を生成（.scad）
+python3 run.py model "筐体のブラケット"        # → OpenSCAD/FreeCAD
+python3 run.py model "抽象アートショート"      # → Blender（シーン工程）
+python3 run.py model "この画像から3D化"        # → gen3d（GPU）
+```
+ルーターがプロンプトを判定し、**CAD（OpenSCAD/FreeCAD）/ gen3d / Blender** を自動で使い分けます。
+
 ---
 
 ## 7. コーディングシステム（opencode等）から操作（MCP）
@@ -212,7 +238,7 @@ MCP サーバーを起動し、opencode / Claude Code 等から動画システ�
 
 **公開ツール**: `video_factory` / `video_scene` / `video_scene_types` / `video_studio_run` /
 `video_studio_status` / `video_media_edit` / `video_composite` / `video_music` /
-`video_image` / `video_transcribe` / `video_check`
+`video_image` / `video_transcribe` / `video_model` / `video_check`
 
 ---
 
