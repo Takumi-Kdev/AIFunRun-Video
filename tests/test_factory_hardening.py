@@ -21,6 +21,8 @@ class FakeRegistry:
             if action == "render":
                 return _FR(ok=True, data={"code": "bpy.ops.render.render(animation=True)"})
             return _FR(ok=True, data={"code": "# scene/shot"})
+        if name == "scene":
+            return _FR(ok=True, data={"code": "# scene", "scene_type": "abstract_3d"})
         if name == "tts":
             return _FR(ok=True, artifacts=["/tmp/voice.wav"])
         if name == "video2d":

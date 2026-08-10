@@ -248,17 +248,38 @@ def run(instruction: str, template: str | None = None,
                 _add("assets", False, f"3D資産なし: {res.error}", tool="gen3d")
         # res is None → タイムアウト等で _add 済み
 
-    # ---- シーン・照明 ----
+    # ---- シーン・照明（プロンプト→多様なBlenderシーン） ----
     if "scene" in steps:
-        def _scene():
-            s = reg.call("animate", action="scene_setup")
-            l = reg.call("animate", action="lighting")
-            return (s.data.get("code", "") + "\n" + l.data.get("code", ""))
-        code = _guarded_call(_scene, "scene")
-        if code is not None:
+        code, tool, detail = None, "scene", "シーン生成不可"
+        try:
+            from engines import scene as scene_mod
+            stype = scene_mod.classify(title)
+            st, val = _run_guarded(
+                lambda: reg.call("scene", action="build", prompt=title, scene_type=stype,
+                                 out=str(out_dir / "render.mp4"), resolution=f"{res_w},{res_h}",
+                                 fps=fps, frames=120),
+                timeout, retries)
+            if st == "ok" and val.ok and val.data.get("code"):
+                code = val.data["code"]
+                detail = f"シーン生成: {val.data.get('scene_type', stype)}"
+        except Exception:  # noqa: BLE001
+            code = None
+        if not code:
+            # フォールバック: 基本シーン+照明
+            def _fb_scene():
+                s = reg.call("animate", action="scene_setup")
+                l = reg.call("animate", action="lighting")
+                return s.data.get("code", "") + "\n" + l.data.get("code", "")
+            st2, val2 = _run_guarded(_fb_scene, timeout, retries)
+            if st2 == "ok" and val2:
+                code, tool = val2, "animate"
+                detail = "シーン/照明(フォールバック)"
+        if code:
             sf = out_dir / "scene.py"
             sf.write_text(code, encoding="utf-8")
-            _add("scene", True, "シーン/照明スクリプト", artifact=sf, tool="animate")
+            _add("scene", True, detail, artifact=sf, tool=tool)
+        else:
+            _add("scene", False, detail, tool=tool)
 
     # ---- 演出（オービット） ----
     if "shot" in steps:

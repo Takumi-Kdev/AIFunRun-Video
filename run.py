@@ -102,6 +102,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("studio-status", help="スタジオ状況")
     sub.add_parser("check", help="セットアップ検証")
 
+    psc = sub.add_parser("scene", help="プロンプトからBlenderシーンを生成")
+    psc.add_argument("prompt")
+    psc.add_argument("--type", help="シーンタイプ（abstract_3d/low_poly_world/product_showcase/tech_abstract）")
+    psc.add_argument("--out", default="output/render.mp4")
+
     pd = sub.add_parser("daemon", help="自律生産ループ")
     pd.add_argument("--interval", type=int, default=60)
 
@@ -117,6 +122,18 @@ def main(argv: list[str] | None = None) -> int:
         r = _studio_status()
     elif args.cmd == "check":
         return _check()
+    elif args.cmd == "scene":
+        from engines import scene
+        stype = args.type or scene.classify(args.prompt)
+        code = scene.build_scene(args.prompt, scene_type=stype, out=args.out)
+        # 生成したbpyコードを scene_<type>.py として保存（Blenderで実行する用）
+        outdir = Path(args.out).parent
+        outdir.mkdir(parents=True, exist_ok=True)
+        code_path = outdir / f"scene_{stype}.py"
+        code_path.write_text(code, encoding="utf-8")
+        print(json.dumps({"ok": True, "scene_type": stype, "code_path": str(code_path),
+                          "frames": 120}, ensure_ascii=False, indent=2))
+        return 0
     elif args.cmd == "daemon":
         _daemon(args.interval)
         return 0

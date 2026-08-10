@@ -47,6 +47,7 @@ def register_all(registry: tool_layer.ToolRegistry) -> None:
     from .animate import AnimateTool
     from .moderation import ModerationTool
     from .tk_cut import TKCutExpressTool
+    from .scene import SceneTool
     registry.register(TTSTool())
     registry.register(BlenderTool())
     registry.register(Gen3DTool())
@@ -55,13 +56,14 @@ def register_all(registry: tool_layer.ToolRegistry) -> None:
     registry.register(AnimateTool())
     registry.register(ModerationTool())
     registry.register(TKCutExpressTool())
+    registry.register(SceneTool())
     write_log(f"エンジン登録: {registry.names()}", "INFO")
 
 
 def bootstrap() -> tool_layer.ToolRegistry:
     """共有レジストリへエンジンを登録し、返す。"""
     reg = tool_layer.get_registry()
-    expected = {"tts", "blender", "gen3d", "motion", "video2d", "animate", "moderation", "video_edit"}
+    expected = {"tts", "blender", "gen3d", "motion", "video2d", "animate", "moderation", "video_edit", "scene"}
     if expected.issubset(reg.names()):
         return reg
     register_all(reg)
