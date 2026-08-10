@@ -144,12 +144,12 @@ def image_to_video(images: list[str], out: str, *, duration: float = 3.0,
             clips.append(str(c))
     if not clips:
         return False, "スライドクリップ生成に失敗"
-    # concat
+    # concat は list 内の相対パスを list ファイルの場所基準で解釈するため、絶対パスにする
     concat = tmp_dir / "list.txt"
-    concat.write_text("\n".join(f"file '{c}'" for c in clips), encoding="utf-8")
-    out_p = Path(out)
+    concat.write_text("\n".join(f"file '{Path(c).resolve()}'" for c in clips), encoding="utf-8")
+    out_p = Path(out).resolve()
     _mkparent(out_p)
-    argv = ["-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(out)]
+    argv = ["-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(out_p)]
     ok, msg = _run_ffmpeg(argv, out_p)
     return ok, msg
 

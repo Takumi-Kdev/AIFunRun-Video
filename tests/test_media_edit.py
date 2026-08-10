@@ -50,6 +50,19 @@ def test_image_to_video_slideshow(tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_image_to_video_relative_paths(tmp_path, monkeypatch):
+    # 回帰: 相対パス出力でも concat のパス解決が壊れないこと
+    _need_ffmpeg()
+    monkeypatch.chdir(tmp_path)
+    a, b = tmp_path / "a.png", tmp_path / "b.png"
+    _make_img(a, "red")
+    _make_img(b, "blue")
+    out = "slide.mp4"  # 相対パス
+    ok, msg = media_edit.image_to_video([str(a), str(b)], out, duration=1.0)
+    assert ok, msg
+    assert (tmp_path / "slide.mp4").exists()
+
+
 def test_composite(tmp_path):
     _need_ffmpeg()
     a = tmp_path / "a.png"
