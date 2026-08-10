@@ -1,0 +1,23 @@
+{
+  "id": "news_presenter",
+  "name": "ニュース風プレゼンター",
+  "pattern": "human",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "character": "human_avatar",
+  "voice": "chatterbox",
+  "subtitle": true,
+  "steps": [
+    "plan",
+    "moderate",
+    "assets",
+    "scene",
+    "render",
+    "voice",
+    "background",
+    "edit"
+  ]
+}

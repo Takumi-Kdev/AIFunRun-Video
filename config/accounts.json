@@ -1,0 +1,20 @@
+{
+  "acct_main": {
+    "name": "メインアカウント",
+    "platform": "youtube",
+    "status": "active",
+    "note": "解説・How-to系メイン配信"
+  },
+  "acct_buzz": {
+    "name": "バズ用アカウント",
+    "platform": "tiktok",
+    "status": "active",
+    "note": "トレンド・話題性重視のショート"
+  },
+  "acct_edu": {
+    "name": "教育系アカウント",
+    "platform": "youtube",
+    "status": "active",
+    "note": "学び・知識系の長尺"
+  }
+}

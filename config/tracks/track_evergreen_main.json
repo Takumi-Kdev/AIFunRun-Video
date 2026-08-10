@@ -1,0 +1,11 @@
+{
+  "id": "track_evergreen_main",
+  "name": "永遠路線・メイン解説",
+  "account": "acct_main",
+  "content_line": "evergreen",
+  "template": "short_explainer",
+  "character": "mascot",
+  "active": true,
+  "auto_produce": false,
+  "publish": { "enabled": false, "approval_required": true }
+}

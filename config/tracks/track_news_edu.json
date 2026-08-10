@@ -1,0 +1,11 @@
+{
+  "id": "track_news_edu",
+  "name": "情報路線・教育",
+  "account": "acct_edu",
+  "content_line": "news",
+  "template": "news_presenter",
+  "character": "human_avatar",
+  "active": true,
+  "auto_produce": false,
+  "publish": { "enabled": false, "approval_required": true }
+}

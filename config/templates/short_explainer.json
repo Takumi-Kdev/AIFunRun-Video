@@ -1,0 +1,23 @@
+{
+  "id": "short_explainer",
+  "name": "ショート解説",
+  "pattern": "animation",
+  "resolution": [
+    1080,
+    1920
+  ],
+  "fps": 30,
+  "character": "mascot",
+  "voice": "kokoro",
+  "subtitle": true,
+  "steps": [
+    "plan",
+    "moderate",
+    "assets",
+    "scene",
+    "render",
+    "voice",
+    "background",
+    "edit"
+  ]
+}

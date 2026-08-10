@@ -1,0 +1,20 @@
+{
+  "id": "ai_visual",
+  "name": "AI感的ショート",
+  "pattern": "ai",
+  "resolution": [
+    1080,
+    1920
+  ],
+  "fps": 30,
+  "character": null,
+  "voice": "kokoro",
+  "subtitle": true,
+  "steps": [
+    "plan",
+    "moderate",
+    "background",
+    "voice",
+    "edit"
+  ]
+}

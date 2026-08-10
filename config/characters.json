@@ -1,0 +1,23 @@
+{
+  "mascot": {
+    "name": "3Dマスコット",
+    "rig": "mascot.blend",
+    "voice": "kokoro",
+    "style": "low_poly",
+    "asset_hint": "low_poly"
+  },
+  "human_avatar": {
+    "name": "3Dヒューマンアバタ",
+    "rig": "human.blend",
+    "voice": "chatterbox",
+    "style": "realistic",
+    "asset_hint": "realistic"
+  },
+  "none": {
+    "name": "キャラなし",
+    "rig": null,
+    "voice": null,
+    "style": null,
+    "asset_hint": null
+  }
+}

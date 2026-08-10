@@ -1,0 +1,17 @@
+{
+  "evergreen": {
+    "name": "永遠路線",
+    "strategy": "長期間閲覧される解説・How-to・知識系。検索需要を狙う",
+    "suggested_template": "short_explainer"
+  },
+  "viral": {
+    "name": "バズ路線",
+    "strategy": "トレンド・話題性・感情を動かすショート。拡散重視",
+    "suggested_template": "ai_visual"
+  },
+  "news": {
+    "name": "情報/ニュース路線",
+    "strategy": "時事・速報を顔出しプレゼンター風で発信",
+    "suggested_template": "news_presenter"
+  }
+}

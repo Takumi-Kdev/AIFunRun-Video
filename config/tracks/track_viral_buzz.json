@@ -1,0 +1,11 @@
+{
+  "id": "track_viral_buzz",
+  "name": "バズ路線・TikTok",
+  "account": "acct_buzz",
+  "content_line": "viral",
+  "template": "ai_visual",
+  "character": "none",
+  "active": true,
+  "auto_produce": false,
+  "publish": { "enabled": false, "approval_required": true }
+}

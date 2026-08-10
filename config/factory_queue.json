@@ -1,0 +1,12 @@
+[
+  {
+    "id": "demo_1",
+    "instruction": "AIツールの基本を解説するショート動画",
+    "template": "short_explainer"
+  },
+  {
+    "id": "demo_2",
+    "instruction": "ニュース風に今日のAIニュースをまとめた動画",
+    "template": "news_presenter"
+  }
+]

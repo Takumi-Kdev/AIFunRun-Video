@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+output/
+logs/
+state/
+.DS_Store
+*.mp4
+*.ass
+config/credentials/
+config/credentials/.env
+!config/credentials/.env.example

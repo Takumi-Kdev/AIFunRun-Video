@@ -1,0 +1,16 @@
+{
+  "name": "AIFunRun-Video",
+  "factory": {
+    "video_enabled": true,
+    "production_enabled": false,
+    "default_template": "short_explainer",
+    "batch": 1,
+    "timeout_seconds": 90,
+    "retries": 1,
+    "record_cost": true,
+    "cost_per_run": 0.5
+  },
+  "video": {
+    "default_topic": "AI自動生成デモ動画"
+  }
+}
