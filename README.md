@@ -8,7 +8,10 @@ Blender を主軸に、オープンソースの動画・モデリング技術を
 ## 特徴
 - **工場型オーケストレーション**: plan → assets(3D) → scene(Blender) → render → voice → background → edit
 - **BlenderMCP 統合**: Blender をテキスト/コード駆動（`engines/blender`）
+- **シーン演出エンジン**: プロンプトだけで多様な Blender シーンを自動生成（`engines/scene`）
+- **メディア編集・合成**: FFmpeg で画像/動画編集 + Blender オーバーレイ合成（`engines/media_edit`）
 - **多トラック動画スタジオ**: アカウント × 路線 × タイプ × キャラ を分離管理（`core/studio`）
+- **MCP サーバー**: opencode / Claude Code 等のコーディングシステムから操作可能
 - **堅牢**: タイムアウト/リトライ付き工程実行・モデレーション安全ゲート
 - **フォールバック**: GPU/外部ツールが無くても ffmpeg で実動画を生成（必ず動く）
 
@@ -22,16 +25,40 @@ bash setup.sh                 # venv + 依存 + .env + 検証（ffmpeg が必要
 python3 run.py factory "AIの基本を解説するショート動画"          # 工場で生成
 python3 run.py factory "幻想的なショート" --template ai_visual   # テンプレ指定
 python3 run.py studio track_evergreen_main "永遠路線の解説動画"   # トラック指定
+python3 run.py scene "商品プロモーション"                        # Blenderシーン生成
 python3 run.py tracks           # トラック/アカウント/路線一覧
 python3 run.py studio-status    # 全トラック状況
 python3 run.py daemon           # 自律連続生産ループ
 python3 run.py check            # セットアップ検証
 ```
 
+### メディア編集・合成（FFmpeg + Blender）
+```bash
+python3 run.py media-edit --input in.mp4 --out out.mp4 --format vertical --text "タイトル"
+python3 run.py media-edit --input in.mp4 --out out.mp4 --speed 2.0          # 2倍速
+python3 run.py slideshow --images a.png,b.png --out slide.mp4              # ケンバーンズ風スライド
+python3 run.py composite --base base.mp4 --overlay overlay.png --out out.mp4 # Blender合成
+```
+
+## opencode / コーディングシステムから操作（MCP）
+MCP サーバーを起動し、opencode 等の MCP クライアントから動画システムを操作できます。
+```bash
+./run.sh mcp      # stdio MCP サーバー起動
+```
+`opencode.json` へ登録（例）:
+```json
+{ "mcp": {
+    "video": { "type": "local", "command": ["python3", "run.py", "mcp"] }
+  }
+}
+```
+公開ツール: `video_factory` / `video_scene` / `video_scene_types` / `video_studio_run` /
+`video_studio_status` / `video_media_edit` / `video_composite` / `video_check`
+
 ## 構成
 ```
-core/     … paths/logger/state/tool_layer/llm/credentials/factory/studio
-engines/  … blender/gen3d/motion/video2d/animate/tts/moderation/tk_cut
+core/     … paths/logger/state/tool_layer/llm/credentials/factory/studio/process/mcp_server
+engines/  … blender/gen3d/motion/video2d/animate/scene/media_edit/tts/moderation/tk_cut
 config/   … templates/・tracks/・accounts/・lines/・characters/・factory_queue/・credentials(.env)
 tests/    … 動画システムのテスト
 docs/     … 設計（VIDEO_FACTORY.md）

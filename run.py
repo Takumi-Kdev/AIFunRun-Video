@@ -8,6 +8,10 @@
   python run.py studio-status          # スタジオ全トラック状況
   python run.py check                  # セットアップ検証
   python run.py daemon [--interval 60] # 自律連続生産ループ
+  python run.py media-edit --input X --out Y [--format vertical] [--text '...']
+  python run.py composite --base B --overlay O --out Z
+  python run.py slideshow --images a.png b.png --out S.mp4
+  python run.py mcp                       # MCPサーバー起動（opencode等から接続）
 """
 from __future__ import annotations
 
@@ -110,6 +114,26 @@ def main(argv: list[str] | None = None) -> int:
     pd = sub.add_parser("daemon", help="自律生産ループ")
     pd.add_argument("--interval", type=int, default=60)
 
+    sub.add_parser("mcp", help="MCPサーバー起動（opencode等から操作）")
+
+    pe = sub.add_parser("media-edit", help="FFmpegで画像/動画編集")
+    pe.add_argument("--input", required=True)
+    pe.add_argument("--out", required=True)
+    pe.add_argument("--format", help="vertical/horizontal/square")
+    pe.add_argument("--speed", type=float, default=1.0)
+    pe.add_argument("--text", help="焼き込みテキスト")
+    pe.add_argument("--audio")
+
+    pc = sub.add_parser("composite", help="ベース映像にBlenderオーバーレイを合成")
+    pc.add_argument("--base", required=True)
+    pc.add_argument("--overlay", required=True)
+    pc.add_argument("--out", required=True)
+
+    ps2 = sub.add_parser("slideshow", help="画像→スライドショー動画")
+    ps2.add_argument("--images", required=True, help="カンマ区切り画像パス")
+    ps2.add_argument("--out", required=True)
+    ps2.add_argument("--format", default="vertical")
+
     args = p.parse_args(argv)
 
     if args.cmd == "factory":
@@ -137,6 +161,27 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "daemon":
         _daemon(args.interval)
         return 0
+    elif args.cmd == "mcp":
+        from core import mcp_server
+        mcp_server.main()
+        return 0
+    elif args.cmd == "media-edit":
+        from engines import media_edit
+        ok, msg = media_edit.edit_media(args.input, args.out, fmt=args.format,
+                                        speed=args.speed, burn_text=args.text, audio=args.audio)
+        print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
+        return 0 if ok else 1
+    elif args.cmd == "composite":
+        from engines import media_edit
+        ok, msg = media_edit.composite(args.base, args.overlay, args.out)
+        print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
+        return 0 if ok else 1
+    elif args.cmd == "slideshow":
+        from engines import media_edit
+        images = [i.strip() for i in args.images.split(",") if i.strip()]
+        ok, msg = media_edit.image_to_video(images, args.out, fmt=args.format)
+        print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
+        return 0 if ok else 1
     else:
         p.print_help()
         return 1
