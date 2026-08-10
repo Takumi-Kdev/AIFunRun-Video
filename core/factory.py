@@ -35,7 +35,7 @@ _TEMPLATE_KEYWORDS = {
 }
 
 _TEMPLATE_REQUIRED = ["id", "name", "pattern", "resolution", "fps", "steps"]
-_STATION_ALLOWED = ["plan", "assets", "scene", "shot", "render", "voice", "background", "edit", "moderate"]
+_STATION_ALLOWED = ["plan", "assets", "scene", "shot", "render", "voice", "background", "edit", "moderate", "music"]
 
 
 # --------------------------------------------------------------------------- #
@@ -342,6 +342,28 @@ def run(instruction: str, template: str | None = None,
             _add("edit", True, "編集ワークフロー", tool="video_edit")
         else:
             _add("edit", False, f"編集不可: {e.error if e else 'guard'}", tool="video_edit")
+
+    # ---- BGM 合成（Blenderで作れない音楽を付与） ----
+    if "music" in steps:
+        cand = [a for a in artifacts if a.endswith(".mp4")]
+        if cand:
+            base = cand[-1]
+            bgm = out_dir / "bgm.mp3"
+            final = out_dir / "final_with_bgm.mp4"
+            mood = "upbeat" if template_id in ("short_explainer",) else "epic"
+            try:
+                st_m, _ = _run_guarded(
+                    lambda: reg.call("music", action="generate", mood=mood, out=str(bgm)), timeout, retries)
+                st_b, val_b = _run_guarded(
+                    lambda: reg.call("music", action="add_bgm", video=base, music=str(bgm),
+                                     out=str(final), volume=0.35), timeout, retries)
+                if st_b == "ok" and val_b.ok and final.exists():
+                    artifacts.append(str(final))
+                    _add("music", True, "BGM合成", artifact=final, tool="music")
+                else:
+                    _add("music", False, "BGM合成不可", tool="music")
+            except Exception as exc:  # noqa: BLE001
+                _add("music", False, f"BGM失敗: {exc}", tool="music")
 
     # ---- script 保存 ----
     script_file = out_dir / "script.txt"

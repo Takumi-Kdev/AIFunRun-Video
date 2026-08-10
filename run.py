@@ -12,6 +12,10 @@
   python run.py composite --base B --overlay O --out Z
   python run.py slideshow --images a.png b.png --out S.mp4
   python run.py mcp                       # MCPサーバー起動（opencode等から接続）
+  python run.py music --mood calm --out bgm.mp3 [--video X]   # BGM生成/動画へ合成
+  python run.py image --prompt '...' --out img.png            # テキスト→画像
+  python run.py thumbnail --video X --out t.jpg               # 動画からサムネ
+  python run.py transcribe --media X --out s.srt              # 音声→字幕
 """
 from __future__ import annotations
 
@@ -134,6 +138,23 @@ def main(argv: list[str] | None = None) -> int:
     ps2.add_argument("--out", required=True)
     ps2.add_argument("--format", default="vertical")
 
+    pm = sub.add_parser("music", help="BGM生成/動画へ合成")
+    pm.add_argument("--mood", default="calm")
+    pm.add_argument("--out", default="output/bgm.mp3")
+    pm.add_argument("--video", help="指定するとこの動画にBGMを合成")
+
+    pi = sub.add_parser("image", help="テキスト→2D画像")
+    pi.add_argument("--prompt", required=True)
+    pi.add_argument("--out", default="output/image.png")
+
+    pth = sub.add_parser("thumbnail", help="動画からサムネイル抽出")
+    pth.add_argument("--video", required=True)
+    pth.add_argument("--out", default="output/thumb.jpg")
+
+    ptr = sub.add_parser("transcribe", help="音声→字幕SRT")
+    ptr.add_argument("--media", required=True)
+    ptr.add_argument("--out", default="output/subtitle.srt")
+
     args = p.parse_args(argv)
 
     if args.cmd == "factory":
@@ -180,6 +201,36 @@ def main(argv: list[str] | None = None) -> int:
         from engines import media_edit
         images = [i.strip() for i in args.images.split(",") if i.strip()]
         ok, msg = media_edit.image_to_video(images, args.out, fmt=args.format)
+        print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
+        return 0 if ok else 1
+    elif args.cmd == "music":
+        from engines import music
+        if args.video:
+            gok, gmsg = music.generate(args.mood, "output/_bgm.mp3")
+            if gok:
+                ok, msg = music.add_bgm(args.video, "output/_bgm.mp3", args.out, 0.35)
+                import os
+                try: os.remove("output/_bgm.mp3")
+                except OSError: pass
+            else:
+                ok, msg = False, gmsg
+        else:
+            ok, msg = music.generate(args.mood, args.out)
+        print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
+        return 0 if ok else 1
+    elif args.cmd == "image":
+        from engines import imaging
+        ok, msg = imaging.procedural_image(args.prompt, args.out)
+        print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
+        return 0 if ok else 1
+    elif args.cmd == "thumbnail":
+        from engines import imaging
+        ok, msg = imaging.extract_thumbnail(args.video, args.out)
+        print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
+        return 0 if ok else 1
+    elif args.cmd == "transcribe":
+        from engines import transcribe
+        ok, msg = transcribe.transcribe(args.media, args.out)
         print(json.dumps({"ok": ok, "output": msg}, ensure_ascii=False))
         return 0 if ok else 1
     else:

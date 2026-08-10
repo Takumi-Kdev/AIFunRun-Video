@@ -55,6 +55,17 @@ def _define_tools() -> None:
     _tool("video_composite", "ベース映像に Blender RGBA オーバーレイを合成",
           {"type": "object", "properties": {"base": {"type": "string"}, "overlay": {"type": "string"}, "out": {"type": "string"}},
            "required": ["base", "overlay", "out"]})
+    _tool("video_music", "テキスト(ムード)からBGM生成・動画へ合成",
+          {"type": "object", "properties": {"mood": {"type": "string"}, "out": {"type": "string"},
+           "video": {"type": "string"}}})
+    _tool("video_image", "テキストから2D画像/サムネイル/背景を生成",
+          {"type": "object", "properties": {"action": {"type": "string"}, "prompt": {"type": "string"},
+           "video": {"type": "string"}, "out": {"type": "string"}, "title": {"type": "string"}},
+           "required": ["action"]})
+    _tool("video_transcribe", "音声→字幕SRT生成・字幕焼き込み",
+          {"type": "object", "properties": {"media": {"type": "string"}, "video": {"type": "string"},
+           "srt": {"type": "string"}, "out": {"type": "string"}, "action": {"type": "string"}},
+           "required": ["action"]})
     _tool("video_check", "セットアップ検証", {"type": "object", "properties": {}})
 
 
@@ -90,6 +101,31 @@ def _call_tool(name: str, arguments: dict) -> dict:
     if name == "video_composite":
         res = reg.call("media_edit", action="composite", base=str(arguments.get("base", "")),
                        overlay=str(arguments.get("overlay", "")), out=str(arguments.get("out", "")))
+        return {"ok": res.ok, "data": res.data, "error": res.error}
+    if name == "video_music":
+        if arguments.get("video"):
+            mres = reg.call("music", action="generate", mood=str(arguments.get("mood", "calm")),
+                            out=str(arguments.get("out", "output/bgm.mp3")))
+            if mres.ok and arguments.get("video"):
+                add = reg.call("music", action="add_bgm", video=str(arguments.get("video")),
+                               music=str(arguments.get("out", "output/bgm.mp3")),
+                               out="output/final_with_bgm.mp4", volume=0.35)
+                return {"ok": add.ok, "data": add.data, "error": add.error}
+            return {"ok": mres.ok, "data": mres.data, "error": mres.error}
+        mres = reg.call("music", action="generate", mood=str(arguments.get("mood", "calm")),
+                        out=str(arguments.get("out", "output/bgm.mp3")))
+        return {"ok": mres.ok, "data": mres.data, "error": mres.error}
+    if name == "video_image":
+        action = str(arguments.get("action", "generate"))
+        res = reg.call("imaging", action=action, prompt=str(arguments.get("prompt", "")),
+                       video=str(arguments.get("video", "")), out=str(arguments.get("out", "output/image.png")),
+                       title=str(arguments.get("title", "")))
+        return {"ok": res.ok, "data": res.data, "error": res.error}
+    if name == "video_transcribe":
+        action = str(arguments.get("action", "transcribe"))
+        res = reg.call("transcribe", action=action, media=str(arguments.get("media", "")),
+                       video=str(arguments.get("video", "")), srt=str(arguments.get("srt", "")),
+                       out=str(arguments.get("out", "output/subtitle.srt")))
         return {"ok": res.ok, "data": res.data, "error": res.error}
     if name == "video_check":
         import subprocess

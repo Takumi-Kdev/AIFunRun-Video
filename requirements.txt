@@ -5,3 +5,4 @@ pytest>=8
 
 # 動画レンダリングには外部の ffmpeg が必要（OS にインストール）
 # 3D 生成（任意・GPUメインPC）: torch / tsr / trellis / hy3dgen 等
+pillow>=8.0

@@ -10,6 +10,9 @@ Blender を主軸に、オープンソースの動画・モデリング技術を
 - **BlenderMCP 統合**: Blender をテキスト/コード駆動（`engines/blender`）
 - **シーン演出エンジン**: プロンプトだけで多様な Blender シーンを自動生成（`engines/scene`）
 - **メディア編集・合成**: FFmpeg で画像/動画編集 + Blender オーバーレイ合成（`engines/media_edit`）
+- **BGM/音楽生成**: テキスト（ムード）からBGM生成・動画へ合成（`engines/music`）
+- **2D画像/サムネイル**: テキストから画像・サムネ・背景を生成（`engines/imaging`）
+- **字幕生成**: 音声→字幕SRT・焼き込み（faster-whisper、`engines/transcribe`）
 - **多トラック動画スタジオ**: アカウント × 路線 × タイプ × キャラ を分離管理（`core/studio`）
 - **MCP サーバー**: opencode / Claude Code 等のコーディングシステムから操作可能
 - **堅牢**: タイムアウト/リトライ付き工程実行・モデレーション安全ゲート
@@ -40,6 +43,15 @@ python3 run.py slideshow --images a.png,b.png --out slide.mp4              # ケ
 python3 run.py composite --base base.mp4 --overlay overlay.png --out out.mp4 # Blender合成
 ```
 
+### 音楽・画像・字幕（テキスト駆動・Blenderが苦手な部分を補完）
+```bash
+python3 run.py music --mood calm --out bgm.mp3               # BGM生成
+python3 run.py music --mood upbeat --video out.mp4 --out with.mp4  # 動画へBGM合成
+python3 run.py image --prompt "サイバーパンクな背景" --out img.png  # 2D画像
+python3 run.py thumbnail --video out.mp4 --out th.jpg         # サムネイル
+python3 run.py transcribe --media voice.wav --out sub.srt     # 音声→字幕
+```
+
 ## opencode / コーディングシステムから操作（MCP）
 MCP サーバーを起動し、opencode 等の MCP クライアントから動画システムを操作できます。
 ```bash
@@ -53,7 +65,8 @@ MCP サーバーを起動し、opencode 等の MCP クライアントから動�
 }
 ```
 公開ツール: `video_factory` / `video_scene` / `video_scene_types` / `video_studio_run` /
-`video_studio_status` / `video_media_edit` / `video_composite` / `video_check`
+`video_studio_status` / `video_media_edit` / `video_composite` / `video_music` /
+`video_image` / `video_transcribe` / `video_check`
 
 ## 構成
 ```
