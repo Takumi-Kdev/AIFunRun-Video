@@ -36,6 +36,15 @@ def _tool(name: str, description: str, schema: dict) -> None:
 
 
 def _define_tools() -> None:
+    _tool("video_create", "一文の意図から企画・絵コンテ・音声・編集・品質検査まで行い完成動画を自律創作",
+          {"type": "object", "properties": {"instruction": {"type": "string"}, "template": {"type": "string"}},
+           "required": ["instruction"]})
+    _tool("video_brief", "動画をレンダーせず、意図からAI作品設計と全ショットを提案",
+          {"type": "object", "properties": {"instruction": {"type": "string"}, "template": {"type": "string"}},
+           "required": ["instruction"]})
+    _tool("video_revise", "既存creative_plan.jsonへ自然言語で追加指示し動画を再創作",
+          {"type": "object", "properties": {"plan": {"type": "string"}, "feedback": {"type": "string"}},
+           "required": ["plan", "feedback"]})
     _tool("video_factory", "プロンプトから動画を生成（工場型・シーン/音声/編集）",
           {"type": "object", "properties": {"instruction": {"type": "string"}, "template": {"type": "string"}},
            "required": ["instruction"]})
@@ -76,10 +85,27 @@ def _call_tool(name: str, arguments: dict) -> dict:
     from engines import bootstrap
     reg = bootstrap()
 
-    if name == "video_factory":
+    if name in ("video_create", "video_factory"):
         from core import factory
         return factory.run(str(arguments.get("instruction", "")),
                            str(arguments.get("template") or None) or None)
+    if name == "video_brief":
+        from core import creative, factory
+        instruction = str(arguments.get("instruction", ""))
+        selected = str(arguments.get("template") or "") or factory._detect_template(instruction)
+        tmpl = factory.load_template(selected) or factory.load_template(factory.DEFAULT_TEMPLATE) or {}
+        plan = creative.create_plan(instruction, tmpl)
+        plan["template_id"] = selected
+        return {"ok": True, "data": plan}
+    if name == "video_revise":
+        from pathlib import Path
+        from core import factory
+        path = Path(str(arguments.get("plan", "")))
+        if not path.exists():
+            return {"ok": False, "error": f"作品設計が見つかりません: {path}"}
+        plan = json.loads(path.read_text(encoding="utf-8"))
+        instruction = f"{plan.get('instruction', plan.get('concept', '動画'))}\n追加の演出指示: {arguments.get('feedback', '')}"
+        return factory.run(instruction, str(plan.get("template_id") or "") or None, label="revision")
     if name == "video_scene":
         from engines import scene
         prompt = str(arguments.get("prompt", ""))

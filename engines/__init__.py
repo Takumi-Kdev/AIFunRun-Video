@@ -53,6 +53,7 @@ def register_all(registry: tool_layer.ToolRegistry) -> None:
     from .imaging import ImagingTool
     from .transcribe import TranscribeTool
     from .cad import CadTool
+    from .composer import ComposerTool
     registry.register(TTSTool())
     registry.register(BlenderTool())
     registry.register(Gen3DTool())
@@ -67,6 +68,7 @@ def register_all(registry: tool_layer.ToolRegistry) -> None:
     registry.register(ImagingTool())
     registry.register(TranscribeTool())
     registry.register(CadTool())
+    registry.register(ComposerTool())
     write_log(f"エンジン登録: {registry.names()}", "INFO")
 
 
@@ -74,7 +76,7 @@ def bootstrap() -> tool_layer.ToolRegistry:
     """共有レジストリへエンジンを登録し、返す。"""
     reg = tool_layer.get_registry()
     expected = {"tts", "blender", "gen3d", "motion", "video2d", "animate", "moderation",
-                "video_edit", "scene", "media_edit", "music", "imaging", "transcribe", "cad"}
+                "video_edit", "scene", "media_edit", "music", "imaging", "transcribe", "cad", "composer"}
     if expected.issubset(reg.names()):
         return reg
     register_all(reg)

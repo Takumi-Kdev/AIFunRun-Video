@@ -10,7 +10,6 @@ Blender では作れない「音楽・BGM」を、テキスト（ムード/雰�
 """
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from core.logger import write_log
@@ -29,7 +28,8 @@ DEFAULT_CHORD = [220.00, 261.63, 329.63]
 
 
 def _ffmpeg() -> str | None:
-    return shutil.which("ffmpeg")
+    from core.tooling import resolve
+    return resolve("ffmpeg")
 
 
 def _mkparent(out: Path) -> None:

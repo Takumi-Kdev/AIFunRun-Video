@@ -20,13 +20,14 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import llm, state
+from . import state
 from .logger import write_log
 from .paths import ensure_dirs
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = ROOT / "config" / "templates"
 CHARACTERS_FILE = ROOT / "config" / "characters.json"
+QUEUE_FILE = ROOT / "config" / "factory_queue.json"
 DEFAULT_TEMPLATE = "short_explainer"
 
 _TEMPLATE_KEYWORDS = {
@@ -35,7 +36,7 @@ _TEMPLATE_KEYWORDS = {
 }
 
 _TEMPLATE_REQUIRED = ["id", "name", "pattern", "resolution", "fps", "steps"]
-_STATION_ALLOWED = ["plan", "assets", "scene", "shot", "render", "voice", "background", "edit", "moderate", "music"]
+_STATION_ALLOWED = ["plan", "assets", "scene", "shot", "render", "voice", "background", "edit", "moderate", "music", "quality"]
 
 
 # --------------------------------------------------------------------------- #
@@ -187,6 +188,8 @@ def run(instruction: str, template: str | None = None,
     report: list[dict] = []
     artifacts: list[str] = []
     script: list[str] = []
+    creative_plan: dict = {}
+    quality: dict = {}
     res_w, res_h = tmpl.get("resolution", [1080, 1920])
     fps = tmpl.get("fps", 30)
     steps = tmpl.get("steps", ["plan"])
@@ -213,10 +216,16 @@ def run(instruction: str, template: str | None = None,
 
     # ---- 企画 / 脚本 ----
     if "plan" in steps:
-        plan = _guarded_call(lambda: llm.generate_script(instruction), "plan")
+        from . import creative
+        plan = _guarded_call(lambda: creative.create_plan(instruction, tmpl), "plan")
         if plan is not None:
-            script = plan
-            _add("plan", True, f"脚本 {len(script)} 行", tool="llm")
+            creative_plan = plan
+            creative_plan["template_id"] = template_id
+            creative_plan["project_id"] = pid
+            script = [str(shot.get("narration", "")) for shot in plan.get("shots", []) if shot.get("narration")]
+            for artifact in creative.save_plan(plan, out_dir):
+                artifacts.append(artifact)
+            _add("plan", True, f"作品設計 {len(script)}ショット / {plan.get('duration_seconds')}秒", tool="creative_director")
         else:
             script = [f"【{title}】"]
             _add("plan", False, "脚本生成失敗", tool="llm")
@@ -342,23 +351,30 @@ def run(instruction: str, template: str | None = None,
         else:
             _add("background", False, f"背景なし: {b.error if b else 'guard'}", tool="video2d")
 
-    # ---- 編集 ----
-    if "edit" in steps and bg_video is not None:
+    # ---- 編集 / 作品構成 ----
+    if "edit" in steps and (creative_plan or bg_video is not None):
         def _edit():
+            if creative_plan:
+                return reg.call("composer", action="compose", plan=creative_plan,
+                                out_dir=str(out_dir), voice=voice_path)
             eo = ensure_dirs()["output"] / "factory" / f"{_now_stamp()}_{template_id}_edit"
             return reg.call("video_edit", edit_action="workflow", input=str(bg_video), out_dir=str(eo))
         e = _guarded_call(_edit, "edit")
         if e is not None and e.ok:
             for a in e.artifacts:
                 artifacts.append(a)
-            _add("edit", True, "編集ワークフロー", tool="video_edit")
+            quality = (e.data or {}).get("quality", {}) if isinstance(e.data, dict) else {}
+            _add("edit", True, "ショット・字幕・音声・BGMを一本の作品へ統合", tool="composer" if creative_plan else "video_edit")
         else:
-            _add("edit", False, f"編集不可: {e.error if e else 'guard'}", tool="video_edit")
+            _add("edit", False, f"編集不可: {e.error if e else 'guard'}", tool="composer" if creative_plan else "video_edit")
 
     # ---- BGM 合成（Blenderで作れない音楽を付与） ----
     if "music" in steps:
         cand = [a for a in artifacts if a.endswith(".mp4")]
-        if cand:
+        composed = next((a for a in reversed(cand) if Path(a).name == "final.mp4"), None)
+        if composed:
+            _add("music", True, "作品構成工程で音響設計・BGMを統合済み", artifact=composed, tool="composer")
+        elif cand:
             base = cand[-1]
             bgm = out_dir / "bgm.mp3"
             final = out_dir / "final_with_bgm.mp4"
@@ -377,13 +393,32 @@ def run(instruction: str, template: str | None = None,
             except Exception as exc:  # noqa: BLE001
                 _add("music", False, f"BGM失敗: {exc}", tool="music")
 
+    # ---- 品質監督 ----
+    if "quality" in steps:
+        final_video = next((Path(a) for a in reversed(artifacts) if str(a).endswith(".mp4") and Path(a).exists()), None)
+        if final_video:
+            try:
+                from engines.composer import inspect_video
+                quality = inspect_video(final_video, expected=(res_w, res_h),
+                                        target_duration=float(creative_plan.get("duration_seconds", 0) or 0))
+                qf = out_dir / "quality_report.json"
+                qf.write_text(json.dumps(quality, ensure_ascii=False, indent=2), encoding="utf-8")
+                _add("quality", bool(quality.get("playable")) and quality.get("score", 0) >= 80,
+                     f"品質スコア {quality.get('score', 0)}/100", artifact=qf, tool="ffprobe")
+            except Exception as exc:  # noqa: BLE001
+                _add("quality", False, f"品質解析失敗: {exc}", tool="ffprobe")
+        else:
+            _add("quality", False, "再生可能な動画成果物がありません", tool="ffprobe")
+
     # ---- script 保存 ----
     script_file = out_dir / "script.txt"
     script_file.write_text("\n".join(script), encoding="utf-8")
     artifacts.append(str(script_file))
 
-    ok = len(artifacts) > 0
-    status = "needs_review" if (ok and not moderation_ok) else ("created" if ok else "draft")
+    playable = bool(quality.get("playable")) if "quality" in steps else any(str(a).endswith(".mp4") for a in artifacts)
+    ok = playable or len(artifacts) > 0
+    status = ("needs_review" if playable and (not moderation_ok or quality.get("score", 100) < 80)
+              else ("created" if playable else "draft"))
 
     # 状態記録（監査・再開用）
     st = state.load()
@@ -415,6 +450,9 @@ def run(instruction: str, template: str | None = None,
         "pattern": tmpl.get("pattern"),
         "character": (char or {}).get("name"),
         "script": script,
+        "creative_plan": creative_plan,
+        "quality": quality,
+        "production_ready": playable and moderation_ok and quality.get("score", 100) >= 80,
         "steps": report,
         "project_id": pid,
     }
@@ -433,6 +471,28 @@ def run_batch(count: int, instruction: str, template: str | None = None) -> dict
         "reports": [{"template": r.get("template"), "status": r.get("status"),
                      "artifacts": r.get("artifacts"), "steps": len(r.get("steps", []))} for r in reports],
     }
+
+
+def run_pending(limit: int = 10) -> dict:
+    """永続キューの未処理作品だけを創作する（daemon用、再起動しても重複しない）。"""
+    done_file = ensure_dirs()["state"] / "factory_done.json"
+    try:
+        queue = json.loads(QUEUE_FILE.read_text(encoding="utf-8")) if QUEUE_FILE.exists() else []
+    except (OSError, ValueError):
+        queue = []
+    try:
+        done = json.loads(done_file.read_text(encoding="utf-8")) if done_file.exists() else {}
+    except (OSError, ValueError):
+        done = {}
+    reports = []
+    for item in [x for x in queue if str(x.get("id", "")) not in done][:max(1, int(limit))]:
+        item_id = str(item.get("id") or f"queue_{len(done) + 1}")
+        result = run(str(item.get("instruction", "")), str(item.get("template") or "") or None, label="queue")
+        done[item_id] = {"status": result.get("status"), "project_id": result.get("project_id"), "at": state._now_iso()}
+        reports.append({"id": item_id, "ok": result.get("ok"), "status": result.get("status"),
+                        "project_id": result.get("project_id")})
+        done_file.write_text(json.dumps(done, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True, "processed": len(reports), "succeeded": sum(bool(x["ok"]) for x in reports), "reports": reports}
 
 
 def status() -> dict:
@@ -467,6 +527,8 @@ def action(name: str, args: dict) -> dict:
         return {"ok": True, "data": list_templates()}
     if name == "status":
         return {"ok": True, "data": status()}
+    if name == "run_pending":
+        return {"ok": True, "data": run_pending(int(args.get("limit", 10)))}
     if name == "characters":
         return {"ok": True, "data": load_characters()}
     if name == "validate":

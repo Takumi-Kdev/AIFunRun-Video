@@ -1,6 +1,7 @@
 # AIFunRun-Video
 
-**動画をゼロから創作する自律システム**（スタンドアロン版）。
+**動画をゼロから創作する自律システム**（スタンドアロン版）。生成ボタンではなく、
+一行の「作りたい意図」を、企画・演出・絵コンテ・音・編集・品質保証まで通した**作品**へ変換します。
 
 Blender（3D）＋ FFmpeg（編集）＋ BGM生成 ＋ 2D画像/サムネ ＋ 字幕生成 を、**テキストモーダルAI
 （プロンプト）だけで操作**できる統合クリエイティブシステム。opencode 等のコーディングシステムからも
@@ -19,6 +20,10 @@ MCP 経由で操作できます。
 - **多トラック動画スタジオ**: アカウント × 路線 × タイプ を分離管理
 - **MCP サーバー**: opencode / Claude Code 等から操作可能
 - **フォールバック**: GPU/外部ツールが無くても ffmpeg で実動画を生成（必ず動く）
+- **AIクリエイティブ・ディレクター**: 尺、視聴者、フック、感情曲線、視覚言語、CTAを質問なしで補完
+- **ショットベース作品構成**: 一貫したVisual Bibleで各ショットを描き、字幕・音声・BGMを完成動画へ統合
+- **自動品質監督**: ffprobeで再生性・尺・解像度・音声を検査し、100点満点で報告
+- **自然言語の改稿**: `creative_plan.json` に「もっと速く」「暗く」などを追加指示して再創作
 
 ---
 
@@ -58,6 +63,27 @@ cd AIFunRun-Video
 powershell -ExecutionPolicy Bypass -File setup.ps1
 .\.venv\Scripts\python run.py factory "AIの基本を解説するショート動画"
 ```
+
+### 入力一文だけで作品を完成させる
+
+```powershell
+# 推奨。テンプレート・尺・演出はAIが推定
+.\.venv\Scripts\python run.py create "AIの未来を、見た人が行動したくなる20秒の縦動画にして"
+
+# レンダーせず、AIの企画と全ショットを先に見る
+.\.venv\Scripts\python run.py brief "新しい商品の世界観を伝える動画"
+
+# 完成後に自然言語で作り直す
+.\.venv\Scripts\python run.py revise output\factory\...\creative_plan.json "冒頭をもっと強く、全体を静かで高級に"
+```
+
+一回の `create` で、同じ作品フォルダに以下を残します。
+
+- `creative_plan.json`: AIが補完した目的・視聴者・尺・Visual/Audio Bible
+- `storyboard.md` / `storyboard/*.png`: 人間と全エンジンが共有する絵コンテ
+- `voice.wav` / `subtitles.srt` / `score.mp3`: 音声・字幕・BGM
+- `visual_master.mp4` / `final.mp4`: 映像マスターと完成作品
+- `quality_report.json`: 再生性、尺、解像度、音声、品質スコア
 
 ---
 
@@ -236,7 +262,7 @@ MCP サーバーを起動し、opencode / Claude Code 等から動画システ�
 }
 ```
 
-**公開ツール**: `video_factory` / `video_scene` / `video_scene_types` / `video_studio_run` /
+**公開ツール**: `video_create` / `video_brief` / `video_revise` / `video_factory` / `video_scene` / `video_scene_types` / `video_studio_run` /
 `video_studio_status` / `video_media_edit` / `video_composite` / `video_music` /
 `video_image` / `video_transcribe` / `video_model` / `video_check`
 

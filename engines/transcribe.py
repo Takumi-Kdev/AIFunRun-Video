@@ -26,7 +26,8 @@ def _whisper_available() -> bool:
 
 
 def _ffmpeg() -> str | None:
-    return shutil.which("ffmpeg")
+    from core.tooling import resolve
+    return resolve("ffmpeg")
 
 
 def _srt_time(sec: float) -> str:

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 from pathlib import Path
 
 from core.logger import write_log
@@ -24,7 +23,8 @@ from core import process
 
 
 def _ffmpeg() -> str | None:
-    return shutil.which("ffmpeg")
+    from core.tooling import resolve
+    return resolve("ffmpeg")
 
 
 def _filters() -> set[str]:

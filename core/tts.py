@@ -25,7 +25,8 @@ JP_VOICES = [
 
 
 def _find_piper() -> str | None:
-    found = shutil.which("piper")
+    from .tooling import resolve
+    found = resolve("piper")
     if found:
         return found
     sibling = Path(sys.executable).resolve().parent / ("piper.exe" if sys.platform == "win32" else "piper")

@@ -2,6 +2,9 @@
 """AIFunRun-Video — 動画をゼロから創作するスタンドアロンCLI。
 
 使い方:
+  python run.py create "欲しい動画を自然な言葉で" [--template テンプレ]
+  python run.py brief "欲しい動画"                # AI作品設計だけ確認
+  python run.py revise creative_plan.json "もっと速く" # 追加指示で再創作
   python run.py factory "指示文" [--template テンプレ] [--count N]
   python run.py studio <トラックID> "指示文" [--count N]
   python run.py tracks                 # トラック/アカウント/路線一覧
@@ -37,6 +40,25 @@ def _factory(instruction: str, template: str | None, count: int) -> dict:
     return factory.run(instruction, template)
 
 
+def _brief(instruction: str, template: str | None) -> dict:
+    from core import creative, factory
+    selected = template or factory._detect_template(instruction)
+    tmpl = factory.load_template(selected) or factory.load_template(factory.DEFAULT_TEMPLATE) or {}
+    plan = creative.create_plan(instruction, tmpl)
+    plan["template_id"] = selected
+    return {"ok": True, "plan": plan}
+
+
+def _revise(plan_file: str, feedback: str) -> dict:
+    from core import factory
+    path = Path(plan_file)
+    if not path.exists():
+        return {"ok": False, "error": f"作品設計が見つかりません: {path}"}
+    plan = json.loads(path.read_text(encoding="utf-8"))
+    instruction = f"{plan.get('instruction', plan.get('concept', '動画'))}\n追加の演出指示: {feedback}"
+    return factory.run(instruction, str(plan.get("template_id") or "") or None, label="revision")
+
+
 def _studio_status() -> dict:
     from core import studio
     return studio.studio_status()
@@ -53,7 +75,7 @@ def _tracks() -> dict:
 
 
 def _check() -> int:
-    import importlib, pkgutil, shutil
+    import importlib, pkgutil
     errs = []
     mods = []
     for pkg in (__import__("core"), __import__("engines")):
@@ -67,7 +89,14 @@ def _check() -> int:
     print("モジュール import:", "NG" if errs else "OK", f"({len(mods)}個)")
     for e in errs:
         print("  -", e)
-    print("ffmpeg:", "あり" if shutil.which("ffmpeg") else "なし（動画生成に必須）")
+    from core.tooling import inventory
+    tools = inventory()
+    for name, path in tools.items():
+        required = name in ("ffmpeg", "ffprobe")
+        state_text = f"あり ({path})" if path else ("なし（必須）" if required else "なし（任意）")
+        print(f"{name}: {state_text}")
+        if required and not path:
+            errs.append(f"{name}: 実行ファイルなし")
     from core import factory, studio
     print(f"テンプレート: {len(factory.list_templates())}種 / トラック: {len(studio.list_tracks())}")
     return 1 if errs else 0
@@ -84,7 +113,9 @@ def _daemon(interval: int) -> None:
             cfg = factory._settings()
             if cfg.get("production_enabled"):
                 from core import factory as f
-                f.action("run_pending", {})  # factory キュー（config/factory_queue.json）
+                queued = f.run_pending()
+                if queued.get("processed"):
+                    print(f"工場キュー自動創作: {queued['succeeded']}/{queued['processed']}件")
         except KeyboardInterrupt:
             print("停止")
             break
@@ -97,7 +128,19 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="AIFunRun-Video 動画創作CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    pf = sub.add_parser("factory", help="工場で動画生成")
+    pcv = sub.add_parser("create", help="一文の意図だけで完成動画を自律創作")
+    pcv.add_argument("instruction")
+    pcv.add_argument("--template")
+
+    pbf = sub.add_parser("brief", help="動画を作らずAI作品設計・絵コンテを確認")
+    pbf.add_argument("instruction")
+    pbf.add_argument("--template")
+
+    prv = sub.add_parser("revise", help="creative_plan.jsonへ追加指示し完成動画を再創作")
+    prv.add_argument("plan")
+    prv.add_argument("feedback")
+
+    pf = sub.add_parser("factory", help="工場で動画創作（互換コマンド）")
     pf.add_argument("instruction")
     pf.add_argument("--template")
     pf.add_argument("--count", type=int, default=1)
@@ -162,7 +205,13 @@ def main(argv: list[str] | None = None) -> int:
 
     args = p.parse_args(argv)
 
-    if args.cmd == "factory":
+    if args.cmd == "create":
+        r = _factory(args.instruction, args.template, 1)
+    elif args.cmd == "brief":
+        r = _brief(args.instruction, args.template)
+    elif args.cmd == "revise":
+        r = _revise(args.plan, args.feedback)
+    elif args.cmd == "factory":
         r = _factory(args.instruction, args.template, args.count)
     elif args.cmd == "studio":
         r = _studio_run(args.track, args.instruction, args.count)

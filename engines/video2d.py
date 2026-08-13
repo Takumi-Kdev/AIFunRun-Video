@@ -26,7 +26,8 @@ def detect_backends() -> dict:
 
 
 def _ffmpeg() -> str | None:
-    return shutil.which("ffmpeg")
+    from core.tooling import resolve
+    return resolve("ffmpeg")
 
 
 def _ffmpeg_bg(out: Path, duration: float = 10.0, w: int = 1080, h: int = 1920, seed: int = 42,
