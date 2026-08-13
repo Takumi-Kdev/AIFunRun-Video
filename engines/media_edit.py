@@ -14,6 +14,7 @@ Actions:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -42,6 +43,23 @@ def _filters() -> set[str]:
 
 def _mkparent(out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _drawtext_font_option() -> str:
+    """fontconfig がないWindows版FFmpeg向けに日本語フォントを明示する。"""
+    candidates = []
+    configured = os.environ.get("AIFUNRUN_FONT_FILE", "").strip()
+    if configured:
+        candidates.append(Path(configured))
+    if os.name == "nt":
+        fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+        candidates.extend([fonts / "meiryo.ttc", fonts / "YuGothM.ttc", fonts / "msgothic.ttc"])
+    for candidate in candidates:
+        if candidate.is_file():
+            # FFmpegのfilter構文ではドライブ文字のコロンをエスケープする。
+            value = candidate.resolve().as_posix().replace(":", r"\:").replace("'", r"\'")
+            return f":fontfile='{value}'"
+    return ""
 
 
 def _run_ffmpeg(argv: list[str], out: Path, timeout_ms: int = 120000) -> tuple[bool, str]:
@@ -86,7 +104,8 @@ def edit_media(input_media: str, out: str, *, resize: tuple[int, int] | None = N
         vf_parts.append(f"setpts={1.0/float(speed):.4f}*PTS")
     if burn_text and "drawtext" in filters:
         t = burn_text.replace(":", r"\:").replace("'", r"\'")
-        vf_parts.append(f"drawtext=text='{t}':fontcolor=white:fontsize=72:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.5")
+        font = _drawtext_font_option()
+        vf_parts.append(f"drawtext=text='{t}'{font}:fontcolor=white:fontsize=72:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.5")
     elif burn_text:
         write_log("burn_text: drawtext フィルタなし（スキップ）", "WARN")
     if subtitles and Path(subtitles).exists() and ("subtitles" in filters or "ass" in filters):
