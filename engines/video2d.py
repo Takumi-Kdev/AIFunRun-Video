@@ -91,7 +91,7 @@ class Video2DTool(Tool):
             h = int(kwargs.get("h", 1920))
             # バックエンドがあればそこへ委譲（未実装バックエンドはフォールバックへ）
             det = detect_backends()
-            backend = next((c for c in T2V_CLIS if det.get(c)), None)
+            backend = None if kwargs.get("procedural_only") else next((c for c in T2V_CLIS if det.get(c)), None)
             if backend:
                 return _run_t2v_backend(backend, topic, out_path, duration)
             # フォールバック: ffmpeg で実動画

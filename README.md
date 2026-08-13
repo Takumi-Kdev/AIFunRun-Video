@@ -24,6 +24,8 @@ MCP 経由で操作できます。
 - **ショットベース作品構成**: 一貫したVisual Bibleで各ショットを描き、字幕・音声・BGMを完成動画へ統合
 - **自動品質監督**: ffprobeで再生性・尺・解像度・音声を検査し、100点満点で報告
 - **自然言語の改稿**: `creative_plan.json` に「もっと速く」「暗く」などを追加指示して再創作
+- **長尺・横動画**: 16:9 / 1080p の章立て、長文ナレーション、チャプター、途中再開を自動管理
+- **DeepSeek-only モード**: 企画・構成・台本だけを DeepSeek が担当し、映像はローカル素材と決定的演出で制作
 
 ---
 
@@ -75,6 +77,9 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 # 完成後に自然言語で作り直す
 .\.venv\Scripts\python run.py revise output\factory\...\creative_plan.json "冒頭をもっと強く、全体を静かで高級に"
+
+# 10分の横長作品。時間だけ変更すれば最大180分まで同じ制作系を使う
+.\.venv\Scripts\python run.py longform "AI自動化を実務目線で深く解説" --minutes 10
 ```
 
 一回の `create` で、同じ作品フォルダに以下を残します。
@@ -84,6 +89,17 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 - `voice.wav` / `subtitles.srt` / `score.mp3`: 音声・字幕・BGM
 - `visual_master.mp4` / `final.mp4`: 映像マスターと完成作品
 - `quality_report.json`: 再生性、尺、解像度、音声、品質スコア
+
+### 長尺作品の動作原則
+
+`longform` は、DeepSeek にアウトラインと章ごとの台本・ショット設計を分割して依頼します。
+画像生成・動画生成・生成3D・音声クローンは呼びません。映像は `assets/library/` の手持ち素材、
+FFmpeg の図解・タイムライン・リスト・引用・データ表示・キネティック文字を自動配役して作ります。
+素材がなくても完成可能で、追加した素材はファイル名とショット内容の一致度で自動採用されます。
+
+長尺レンダーはショット単位で保存されます。中断後に同じ出力フォルダで再実行すると、完成済み
+ショットを再利用します。完成 MP4 には章情報を埋め込み、`chapters.ffmeta`、`render_state.json`、
+`creative_plan.json` に制作根拠を残します。詳しくは [長尺横動画ガイド](docs/LONGFORM.md) を参照してください。
 
 ---
 

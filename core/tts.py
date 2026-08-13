@@ -10,9 +10,12 @@ Piper の日本語音声は tools/ に .onnx と .json を置く。
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import wave
 from pathlib import Path
 
 from .paths import ensure_dirs
@@ -65,6 +68,12 @@ def available() -> dict:
 
 def synthesize(text: str, out_wav: Path) -> str | None:
     """text を音声にし、out_wav に書き出す。成功ならパス、失敗/非対応なら None。"""
+    if len(text) > 900:
+        return synthesize_longform(text, out_wav)
+    return _synthesize_one(text, out_wav)
+
+
+def _synthesize_one(text: str, out_wav: Path) -> str | None:
     out_wav.parent.mkdir(parents=True, exist_ok=True)
     piper = _find_piper()
     if piper and _find_voice():
@@ -77,6 +86,49 @@ def synthesize(text: str, out_wav: Path) -> str | None:
     if espeak:
         return _synthesize_espeak(espeak, text, out_wav)
     return None
+
+
+def _chunks(text: str, limit: int = 650) -> list[str]:
+    sentences = [part.strip() for part in re.split(r"(?<=[。！？!?])", text) if part.strip()]
+    chunks, current = [], ""
+    for sentence in sentences:
+        if current and len(current) + len(sentence) > limit:
+            chunks.append(current)
+            current = sentence
+        else:
+            current += sentence
+    if current:
+        chunks.append(current)
+    return chunks or [text]
+
+
+def synthesize_longform(text: str, out_wav: Path) -> str | None:
+    """長尺ナレーションを安全な分量に分割し、非生成AI音声で一つのWAVへ結合。"""
+    out_wav.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="aifunrun_voice_") as temp:
+        parts = []
+        for index, chunk in enumerate(_chunks(text)):
+            path = Path(temp) / f"part_{index:04d}.wav"
+            if not _synthesize_one(chunk, path):
+                return None
+            parts.append(path)
+        try:
+            with wave.open(str(parts[0]), "rb") as first:
+                params = first.getparams()
+                frames = [first.readframes(first.getnframes())]
+            for path in parts[1:]:
+                with wave.open(str(path), "rb") as source:
+                    if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (
+                            params.nchannels, params.sampwidth, params.framerate):
+                        return None
+                    frames.append(source.readframes(source.getnframes()))
+            with wave.open(str(out_wav), "wb") as target:
+                target.setparams(params)
+                for block in frames:
+                    target.writeframes(block)
+            return str(out_wav) if out_wav.exists() and out_wav.stat().st_size > 44 else None
+        except (OSError, wave.Error):
+            return None
 
 
 def _synthesize_windows_sapi(text: str, out_wav: Path) -> str | None:

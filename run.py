@@ -3,6 +3,7 @@
 
 使い方:
   python run.py create "欲しい動画を自然な言葉で" [--template テンプレ]
+  python run.py longform "テーマ" --minutes 10    # 横型長尺・DeepSeek only
   python run.py brief "欲しい動画"                # AI作品設計だけ確認
   python run.py revise creative_plan.json "もっと速く" # 追加指示で再創作
   python run.py factory "指示文" [--template テンプレ] [--count N]
@@ -28,6 +29,13 @@ import json
 import sys
 import time
 from pathlib import Path
+
+# Windows console encodings such as cp932 cannot represent several characters
+# that legitimately appear in DeepSeek responses and creative plans. Keep the
+# CLI machine-readable instead of crashing while printing a completed result.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
@@ -132,6 +140,10 @@ def main(argv: list[str] | None = None) -> int:
     pcv.add_argument("instruction")
     pcv.add_argument("--template")
 
+    plf = sub.add_parser("longform", help="DeepSeekだけをAIに使う横型長尺作品")
+    plf.add_argument("instruction")
+    plf.add_argument("--minutes", type=float, default=10)
+
     pbf = sub.add_parser("brief", help="動画を作らずAI作品設計・絵コンテを確認")
     pbf.add_argument("instruction")
     pbf.add_argument("--template")
@@ -207,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "create":
         r = _factory(args.instruction, args.template, 1)
+    elif args.cmd == "longform":
+        r = _factory(f"{args.instruction}。横型長尺、{args.minutes:g}分", "longform_documentary", 1)
     elif args.cmd == "brief":
         r = _brief(args.instruction, args.template)
     elif args.cmd == "revise":

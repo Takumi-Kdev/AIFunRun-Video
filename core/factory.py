@@ -31,6 +31,7 @@ QUEUE_FILE = ROOT / "config" / "factory_queue.json"
 DEFAULT_TEMPLATE = "short_explainer"
 
 _TEMPLATE_KEYWORDS = {
+    "longform_documentary": ["長尺", "長編", "横動画", "横型", "ドキュメンタリー", "long-form", "longform", "youtube動画"],
     "news_presenter": ["ニュース", "news", "キャスター", "プレゼンター", "顔出し"],
     "ai_visual": ["幻想的", "ai感", "ミュージック", "ビジュアル", "エモ", "背景"],
 }
@@ -104,6 +105,11 @@ def _resolve_character(template: dict) -> dict | None:
 
 def _detect_template(instruction: str) -> str:
     t = instruction.lower()
+    if any(k in t for k in ("長尺", "長編", "横動画", "横型", "ドキュメンタリー", "long-form", "longform")):
+        return "longform_documentary"
+    duration = __import__("re").search(r"(\d+(?:\.\d+)?)\s*(時間|分|hours?|minutes?)", t)
+    if duration and (duration.group(2) in ("時間", "hour", "hours") or float(duration.group(1)) >= 4):
+        return "longform_documentary"
     for tid, keys in _TEMPLATE_KEYWORDS.items():
         if any(k in t for k in keys):
             return tid
@@ -112,6 +118,15 @@ def _detect_template(instruction: str) -> str:
 
 def _now_stamp() -> str:
     return datetime.now(timezone.utc).astimezone().strftime("%Y%m%d_%H%M%S")
+
+
+def _effective_timeout(base: float, template_id: str, instruction: str) -> float:
+    """長尺レンダーを短尺向け90秒監視で誤停止しない。"""
+    if template_id != "longform_documentary":
+        return base
+    from .longform import parse_duration
+    duration = parse_duration(instruction, 600)
+    return max(base, duration * 3 + 300)
 
 
 def _reg():
@@ -171,6 +186,7 @@ def run(instruction: str, template: str | None = None,
         tmpl = {"id": DEFAULT_TEMPLATE, "name": "ショート解説", "pattern": "animation",
                 "resolution": [1080, 1920], "fps": 30, "steps": ["plan", "background"]}
     template_id = tmpl.get("id", DEFAULT_TEMPLATE)
+    timeout = _effective_timeout(timeout, template_id, instruction)
     char = _resolve_character(tmpl)
 
     if out_dir:
@@ -190,6 +206,7 @@ def run(instruction: str, template: str | None = None,
     script: list[str] = []
     creative_plan: dict = {}
     quality: dict = {}
+    deepseek_only = tmpl.get("ai_policy") == "deepseek_only"
     res_w, res_h = tmpl.get("resolution", [1080, 1920])
     fps = tmpl.get("fps", 30)
     steps = tmpl.get("steps", ["plan"])
@@ -220,12 +237,15 @@ def run(instruction: str, template: str | None = None,
         plan = _guarded_call(lambda: creative.create_plan(instruction, tmpl), "plan")
         if plan is not None:
             creative_plan = plan
+            deepseek_only = deepseek_only or (plan.get("ai_policy") or {}).get("allowed") == ["deepseek"]
             creative_plan["template_id"] = template_id
             creative_plan["project_id"] = pid
             script = [str(shot.get("narration", "")) for shot in plan.get("shots", []) if shot.get("narration")]
             for artifact in creative.save_plan(plan, out_dir):
                 artifacts.append(artifact)
             _add("plan", True, f"作品設計 {len(script)}ショット / {plan.get('duration_seconds')}秒", tool="creative_director")
+            if deepseek_only:
+                _add("ai_policy", True, "生成AIはDeepSeekの構成・脚本のみ。映像・音声・音楽は決定的処理", tool="policy")
         else:
             script = [f"【{title}】"]
             _add("plan", False, "脚本生成失敗", tool="llm")
@@ -241,7 +261,9 @@ def run(instruction: str, template: str | None = None,
             _add("moderate", False, "モデレーション実行不可", tool="moderation")
 
     # ---- 3D資産 ----
-    if "assets" in steps:
+    if "assets" in steps and deepseek_only:
+        _add("assets", True, "DeepSeek-only方針により生成3Dを無効化。手持ち素材・決定的CGを使用", tool="policy")
+    elif "assets" in steps:
         # モデリングツール振り分けルーターで最適な手法を選択（CAD/gen3d/Blender）
         try:
             from core import model_router as _mr
@@ -343,7 +365,8 @@ def run(instruction: str, template: str | None = None,
     if "background" in steps:
         def _bg():
             return reg.call("video2d", action="generate", topic=title,
-                            out=str(out_dir / "background.mp4"), duration=10.0, w=res_w, h=res_h)
+                            out=str(out_dir / "background.mp4"), duration=10.0, w=res_w, h=res_h,
+                            procedural_only=deepseek_only)
         b = _guarded_call(_bg, "background")
         if b is not None and b.ok and b.artifacts:
             bg_video = Path(b.artifacts[0])

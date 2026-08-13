@@ -118,7 +118,7 @@ def chat(system: str, user: str, max_tokens: int = 500, no_cache: bool = False) 
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                "max_tokens": min(max_tokens, 1200),
+                "max_tokens": min(max_tokens, 3000),
                 "temperature": 0.7,
             },
             timeout=60,
@@ -126,7 +126,7 @@ def chat(system: str, user: str, max_tokens: int = 500, no_cache: bool = False) 
         r.raise_for_status()
         data = r.json()
         content = data["choices"][0]["message"]["content"]
-        _record_cost(data, min(max_tokens, 1200))
+        _record_cost(data, min(max_tokens, 3000))
         if cache_key:
             cache = _load_cache()
             cache[cache_key] = content
@@ -221,13 +221,15 @@ def generate_article(topic: str) -> dict:
     }
 
 
-def generate_metadata(topic: str, script: list[str]) -> dict:
+def generate_metadata(topic: str, script: list[str], *, duration_seconds: int | None = None,
+                      format_name: str | None = None) -> dict:
     """投稿用のタイトル・概要・ハッシュタグを生成。"""
     system = (
         "SNS投稿マネージャー。動画のタイトル、概要、ハッシュタグをJSONで返してください: "
         "{\"title\": \"...\", \"description\": \"...\", \"hashtags\": [\"#\", ...]}"
     )
-    user = f"トピック: {topic}\n腳本: {script}"
+    context = f"\n形式: {format_name}\n尺: {duration_seconds}秒" if duration_seconds else ""
+    user = f"トピック: {topic}{context}\n脚本: {script}"
     parsed = _try_json(chat(system, user))
     if parsed and parsed.get("title"):
         tags = [t if t.startswith("#") else f"#{t}" for t in parsed.get("hashtags", [])[:8]]
@@ -237,9 +239,11 @@ def generate_metadata(topic: str, script: list[str]) -> dict:
             "hashtags": tags,
         }
     words = [w for w in topic.replace("#", " ").split() if w][:3] or ["AI"]
-    tags = [f"#{w}" for w in words] + ["#ショート動画", "#マーケティング"]
+    longform = bool(duration_seconds and duration_seconds >= 240)
+    tags = [f"#{w}" for w in words] + (["#長尺動画", "#YouTube"] if longform else ["#ショート動画", "#マーケティング"])
+    duration_label = f"{round(duration_seconds / 60)}分で深掘り" if longform else "30秒でわかる"
     return {
-        "title": f"{topic}｜30秒でわかる",
-        "description": f"{topic} をコンパクトに解説します。{' '.join(tags)}",
+        "title": f"{topic}｜{duration_label}",
+        "description": f"{topic} を{'章立てで体系的に' if longform else 'コンパクトに'}解説します。{' '.join(tags)}",
         "hashtags": tags,
     }

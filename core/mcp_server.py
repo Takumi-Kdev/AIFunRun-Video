@@ -39,6 +39,9 @@ def _define_tools() -> None:
     _tool("video_create", "一文の意図から企画・絵コンテ・音声・編集・品質検査まで行い完成動画を自律創作",
           {"type": "object", "properties": {"instruction": {"type": "string"}, "template": {"type": "string"}},
            "required": ["instruction"]})
+    _tool("video_longform", "DeepSeekだけをAIに使い、章構成・図解・字幕・音声・品質検査を備えた横型長尺動画を創作",
+          {"type": "object", "properties": {"instruction": {"type": "string"},
+           "minutes": {"type": "number", "minimum": 1, "maximum": 180}}, "required": ["instruction"]})
     _tool("video_brief", "動画をレンダーせず、意図からAI作品設計と全ショットを提案",
           {"type": "object", "properties": {"instruction": {"type": "string"}, "template": {"type": "string"}},
            "required": ["instruction"]})
@@ -89,6 +92,11 @@ def _call_tool(name: str, arguments: dict) -> dict:
         from core import factory
         return factory.run(str(arguments.get("instruction", "")),
                            str(arguments.get("template") or None) or None)
+    if name == "video_longform":
+        from core import factory
+        minutes = max(1.0, min(180.0, float(arguments.get("minutes", 10))))
+        instruction = f"{arguments.get('instruction', '')}。横型長尺、{minutes:g}分"
+        return factory.run(instruction, "longform_documentary")
     if name == "video_brief":
         from core import creative, factory
         instruction = str(arguments.get("instruction", ""))

@@ -19,6 +19,9 @@ def _now() -> str:
 
 
 def _duration(text: str, template: dict) -> int:
+    if template.get("id") == "longform_documentary" or any(k in text.lower() for k in ("長尺", "長編", "long-form", "longform")):
+        from .longform import parse_duration
+        return parse_duration(text, int(template.get("duration_seconds", 600)))
     match = re.search(r"(\d{1,3})\s*秒", text)
     if match:
         return max(8, min(180, int(match.group(1))))
@@ -140,6 +143,9 @@ def _normalize(candidate: dict, fallback: dict) -> dict:
 
 def create_plan(instruction: str, template: dict, *, feedback: str = "") -> dict:
     """一行の意図から、制作可能な動画設計図を作る。API無しでも完結する。"""
+    if template.get("id") == "longform_documentary" or template.get("format") == "longform":
+        from .longform import create_longform_plan
+        return create_longform_plan(instruction, template, feedback=feedback)
     fallback = _fallback_plan(instruction, template)
     system = (
         "あなたは映像作家、SNSストラテジスト、編集監督を兼ねる。入力から完成映像を設計する。"

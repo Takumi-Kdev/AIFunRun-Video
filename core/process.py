@@ -94,6 +94,11 @@ def run_command(
         "stdout": subprocess.PIPE,
         "stderr": subprocess.PIPE,
         "text": True,
+        # Windows inherits a locale-dependent decoder (often cp932). FFmpeg and
+        # third-party CLIs can still emit UTF-8 or arbitrary metadata bytes, so
+        # decoding must never be allowed to kill the reader thread.
+        "encoding": "utf-8",
+        "errors": "replace",
         "cwd": cwd,
         "env": env,
     }

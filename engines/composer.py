@@ -35,13 +35,19 @@ def _wrap(text: str, limit: int = 14) -> list[str]:
 
 def render_frame(shot: dict, plan: dict, out: Path, index: int) -> str:
     """一貫したvisual bibleを保ちながら、ショットごとに異なる画面を描く。"""
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageDraw, ImageOps
     target_w, target_h = plan.get("resolution", [1080, 1920])
     scale = min(1.0, 960 / max(target_w, target_h))
     width, height = max(360, int(target_w * scale)), max(360, int(target_h * scale))
     colors = (plan.get("visual_bible") or {}).get("palette") or ["#050816", "#23D5FF", "#8A5CFF", "#F4F7FF"]
     bg, accent, violet, foreground = (colors + ["#050816", "#23D5FF", "#8A5CFF", "#F4F7FF"])[:4]
-    image = Image.new("RGB", (width, height), bg)
+    asset = shot.get("asset") or {}
+    asset_path = Path(str(asset.get("path", "")))
+    if asset.get("kind") == "image" and asset_path.exists():
+        image = ImageOps.fit(Image.open(asset_path).convert("RGB"), (width, height))
+        image = Image.blend(image, Image.new("RGB", (width, height), bg), .58)
+    else:
+        image = Image.new("RGB", (width, height), bg)
     draw = ImageDraw.Draw(image, "RGBA")
 
     # 深度のある光、軌道、グリッド。ショットごとに重心を移して静止画感を減らす。
@@ -62,20 +68,51 @@ def render_frame(shot: dict, plan: dict, out: Path, index: int) -> str:
     dot_y = center_y + int(math.sin(index * 1.17) * orbit * 1.8)
     draw.ellipse((dot_x-7, dot_y-7, dot_x+7, dot_y+7), fill=accent)
 
+    # DeepSeekが選ぶのは表現形式だけ。描画は決定的な図形処理で行い生成AIを使わない。
+    mode = str(shot.get("visual_mode", "kinetic"))
+    panel_x, panel_y = int(width * .58), int(height * .19)
+    panel_w, panel_h = int(width * .32), int(height * .50)
+    if mode in ("diagram", "process"):
+        for step in range(4):
+            x = panel_x + int((step % 2) * panel_w * .52)
+            y = panel_y + int((step // 2) * panel_h * .48)
+            draw.rounded_rectangle((x, y, x + panel_w * .42, y + panel_h * .27), radius=10,
+                                   fill=(12, 18, 38, 205), outline=accent + "88", width=2)
+            draw.text((x + 14, y + 12), f"0{step + 1}", font=_font(max(14, int(width * .018))), fill=accent)
+        draw.line((panel_x + panel_w*.42, panel_y + panel_h*.14, panel_x + panel_w*.52, panel_y + panel_h*.14), fill=violet, width=3)
+    elif mode == "timeline":
+        draw.line((panel_x, panel_y + panel_h*.48, panel_x + panel_w, panel_y + panel_h*.48), fill=accent, width=3)
+        for step in range(5):
+            x = panel_x + panel_w * step / 4
+            draw.ellipse((x-6, panel_y+panel_h*.48-6, x+6, panel_y+panel_h*.48+6), fill=violet)
+    elif mode in ("list", "data"):
+        values = [0.38, 0.72, 0.51, 0.88]
+        for row, value in enumerate(values):
+            y = panel_y + row * panel_h * .19
+            draw.rounded_rectangle((panel_x, y, panel_x + panel_w, y + panel_h*.10), radius=6, fill=(15, 23, 45, 210))
+            draw.rounded_rectangle((panel_x, y, panel_x + panel_w*value, y + panel_h*.10), radius=6, fill=accent + "AA")
+    elif mode == "quote":
+        draw.text((panel_x, panel_y), "“", font=_font(max(80, int(width*.12))), fill=violet)
+        draw.line((panel_x + panel_w*.2, panel_y + panel_h*.75, panel_x + panel_w, panel_y + panel_h*.75), fill=accent, width=3)
+
     pad = int(width * 0.075)
     kicker_font = _font(max(12, int(width * 0.026)))
-    title_font = _font(max(28, int(width * 0.072)))
+    title_font = _font(max(28, int(width * (0.052 if target_w > target_h else 0.072))))
     body_font = _font(max(17, int(width * 0.036)))
-    draw.text((pad, pad), f"SCENE {index + 1:02d}  //  {str(shot.get('purpose', 'STORY')).upper()}", font=kicker_font, fill=accent)
+    chapter_label = f"CH {int(shot.get('chapter', 0)):02d}  //  " if shot.get("chapter") else ""
+    draw.text((pad, pad), f"{chapter_label}SCENE {index + 1:03d}  //  {str(shot.get('purpose', 'STORY')).upper()[:72]}", font=kicker_font, fill=accent)
     lines = _wrap(shot.get("on_screen_text") or shot.get("narration"), 13 if target_h >= target_w else 22)
     line_h = int(title_font.size * 1.25)
-    text_y = int(height * (0.55 if target_h >= target_w else 0.48))
+    text_y = int(height * (0.55 if target_h >= target_w else 0.44))
     for line_no, line in enumerate(lines):
         draw.text((pad, text_y + line_no * line_h), line, font=title_font, fill=foreground)
     body_y = text_y + len(lines) * line_h + int(height * 0.035)
     draw.line((pad, body_y, pad + int(width * 0.18), body_y), fill=accent, width=max(2, width // 260))
     draw.text((pad, body_y + int(height * 0.025)), str(shot.get("motion", "flow")).upper(), font=body_font, fill=violet)
     draw.text((pad, height - pad - body_font.size), str(plan.get("concept", "AIFunRun Creative"))[:48], font=body_font, fill=(210, 220, 242, 130))
+    progress = (index + 1) / max(1, len(plan.get("shots", [])))
+    draw.rectangle((0, height - 5, width, height), fill=(20, 28, 50, 220))
+    draw.rectangle((0, height - 5, int(width * progress), height), fill=accent)
     out.parent.mkdir(parents=True, exist_ok=True)
     image.save(out, quality=94)
     return str(out)
@@ -108,6 +145,27 @@ def _run_ffmpeg(args: list[str], timeout_ms: int = 240_000) -> tuple[bool, str]:
     return result.ok, result.error or result.combined[-600:]
 
 
+def _write_chapters(plan: dict, out: Path) -> str:
+    marks = plan.get("chapter_marks") or []
+    duration = float(plan.get("duration_seconds", 0) or 0)
+    rows = [";FFMETADATA1", f"title={str(plan.get('concept', 'AIFunRun Video')).replace('=', '-')}" ]
+    for index, mark in enumerate(marks):
+        start = int(float(mark.get("start", 0)) * 1000)
+        end = int((float(marks[index + 1].get("start", duration)) if index + 1 < len(marks) else duration) * 1000)
+        title = str(mark.get("title", f"Chapter {index + 1}")).replace("=", "-").replace("\n", " ")
+        rows += ["[CHAPTER]", "TIMEBASE=1/1000", f"START={start}", f"END={max(start + 1, end)}", f"title={title}"]
+    out.write_text("\n".join(rows), encoding="utf-8")
+    return str(out)
+
+
+def _reusable_clip(path: Path, duration: float, width: int, height: int) -> bool:
+    if not path.exists():
+        return False
+    info = inspect_video(path)
+    return (info.get("playable") and info.get("width") == width and info.get("height") == height
+            and abs(float(info.get("duration", 0)) - duration) < .25)
+
+
 def compose(plan: dict, out_dir: Path, voice: str | None = None) -> dict:
     """設計図からショット、字幕、音声、BGMを統合したfinal.mp4を作る。"""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -117,35 +175,55 @@ def compose(plan: dict, out_dir: Path, voice: str | None = None) -> dict:
     width, height = (int(v) for v in plan.get("resolution", [1080, 1920]))
     fps = int(plan.get("fps", 30))
     frame_paths, clip_paths = [], []
-    errors = []
+    errors, reused = [], 0
+    render_state_path = out_dir / "render_state.json"
     for index, shot in enumerate(plan.get("shots", [])):
-        frame = Path(render_frame(shot, plan, frames_dir / f"shot_{index + 1:02d}.png", index))
-        frame_paths.append(str(frame))
         clip = clips_dir / f"shot_{index + 1:02d}.mp4"
         duration = max(1.0, float(shot.get("duration", 3)))
+        if _reusable_clip(clip, duration, width, height):
+            clip_paths.append(str(clip.resolve()))
+            reused += 1
+            continue
+        frame = Path(render_frame(shot, plan, frames_dir / f"shot_{index + 1:03d}.png", index))
+        frame_paths.append(str(frame))
         total_frames = max(2, round(duration * fps))
         zoom = "min(zoom+0.0008,1.08)" if index % 2 == 0 else "if(lte(zoom,1.0),1.08,max(1.0,zoom-0.0008))"
         vf = (f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
               f"zoompan=z='{zoom}':d={total_frames}:s={width}x{height}:fps={fps},format=yuv420p")
-        ok, detail = _run_ffmpeg(["-loop", "1", "-i", str(frame), "-vf", vf, "-t", f"{duration:.3f}",
-                                  "-an", "-c:v", "libx264", "-preset", "veryfast", str(clip)])
+        asset = shot.get("asset") or {}
+        asset_path = Path(str(asset.get("path", "")))
+        if asset.get("kind") == "video" and asset_path.exists():
+            video_vf = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},format=yuv420p"
+            args = ["-stream_loop", "-1", "-i", str(asset_path), "-vf", video_vf, "-t", f"{duration:.3f}",
+                    "-an", "-c:v", "libx264", "-preset", "veryfast", str(clip)]
+        else:
+            args = ["-loop", "1", "-i", str(frame), "-vf", vf, "-t", f"{duration:.3f}",
+                    "-an", "-c:v", "libx264", "-preset", "veryfast", str(clip)]
+        ok, detail = _run_ffmpeg(args, timeout_ms=max(240_000, int(duration * 20_000)))
         if ok and clip.exists():
             clip_paths.append(str(clip.resolve()))
+            render_state_path.write_text(json.dumps({"completed": len(clip_paths), "total": len(plan.get("shots", [])),
+                                                      "last_shot": index + 1}, ensure_ascii=False, indent=2), encoding="utf-8")
         else:
             errors.append(f"shot {index + 1}: {detail}")
+    render_state_path.write_text(json.dumps({"completed": len(clip_paths), "total": len(plan.get("shots", [])),
+                                              "resumed": reused, "status": "clips_ready" if clip_paths else "failed"},
+                                             ensure_ascii=False, indent=2), encoding="utf-8")
     if not clip_paths:
         return {"ok": False, "errors": errors or ["ショットを映像化できませんでした"], "artifacts": frame_paths}
 
     concat = clips_dir / "concat.txt"
     concat.write_text("\n".join(f"file '{path.replace(chr(39), chr(39)*2)}'" for path in clip_paths), encoding="utf-8")
     visual = out_dir / "visual_master.mp4"
+    expected_duration = float(plan.get("duration_seconds") or sum(float(s.get("duration", 3)) for s in plan.get("shots", [])))
     ok, detail = _run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(concat), "-c:v", "libx264",
-                              "-preset", "veryfast", "-pix_fmt", "yuv420p", str(visual)])
+                              "-preset", "veryfast", "-pix_fmt", "yuv420p", str(visual)],
+                             timeout_ms=max(240_000, int(expected_duration * 2_000)))
     if not ok:
         return {"ok": False, "errors": errors + [detail], "artifacts": frame_paths}
 
     subtitle = Path(write_subtitles(plan, out_dir / "subtitles.srt"))
-    duration = float(plan.get("duration_seconds") or sum(float(s.get("duration", 3)) for s in plan.get("shots", [])))
+    duration = expected_duration
     bgm = out_dir / "score.mp3"
     from . import music
     mood = "epic" if "高揚" in plan.get("emotional_arc", []) else "upbeat"
@@ -154,29 +232,40 @@ def compose(plan: dict, out_dir: Path, voice: str | None = None) -> dict:
         errors.append(f"music: {music_detail}")
 
     final = out_dir / "final.mp4"
+    base_final = out_dir / "_final_base.mp4"
     voice_ok = bool(voice and Path(voice).exists())
     if voice_ok and music_ok:
         args = ["-i", str(visual), "-i", str(voice), "-i", str(bgm), "-filter_complex",
                 "[1:a]volume=1.0[v];[2:a]volume=0.16[b];[v][b]amix=inputs=2:duration=longest:dropout_transition=2[a]",
                 "-map", "0:v", "-map", "[a]", "-t", f"{duration:.3f}", "-c:v", "copy", "-c:a", "aac",
-                "-movflags", "+faststart", str(final)]
+                "-movflags", "+faststart", str(base_final)]
     elif voice_ok or music_ok:
         audio = str(voice) if voice_ok else str(bgm)
         args = ["-i", str(visual), "-i", audio, "-map", "0:v", "-map", "1:a", "-t", f"{duration:.3f}",
-                "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart", str(final)]
+                "-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart", str(base_final)]
     else:
-        shutil.copy2(visual, final)
+        shutil.copy2(visual, base_final)
         args = []
     if args:
         ok, detail = _run_ffmpeg(args)
         if not ok:
             errors.append(f"master: {detail}")
-            shutil.copy2(visual, final)
+            shutil.copy2(visual, base_final)
+    chapter_file = Path(_write_chapters(plan, out_dir / "chapters.ffmeta"))
+    if plan.get("chapter_marks"):
+        ok, detail = _run_ffmpeg(["-i", str(base_final), "-i", str(chapter_file), "-map_metadata", "1",
+                                  "-codec", "copy", "-movflags", "+faststart", str(final)])
+        if not ok:
+            errors.append(f"chapters: {detail}")
+            shutil.copy2(base_final, final)
+    else:
+        shutil.copy2(base_final, final)
     quality = inspect_video(final, expected=(width, height), target_duration=duration)
     return {
         "ok": final.exists() and quality.get("playable", False),
-        "final": str(final), "quality": quality, "errors": errors,
-        "artifacts": [*frame_paths, str(subtitle), str(visual), *( [str(bgm)] if bgm.exists() else [] ), str(final)],
+        "final": str(final), "quality": quality, "errors": errors, "resumed_clips": reused,
+        "artifacts": [*frame_paths, str(subtitle), str(chapter_file), str(render_state_path), str(visual),
+                      *( [str(bgm)] if bgm.exists() else [] ), str(final)],
     }
 
 

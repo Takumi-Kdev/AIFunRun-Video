@@ -1,0 +1,13 @@
+{
+  "id": "longform_documentary",
+  "name": "長尺・横型ドキュメンタリー",
+  "pattern": "editorial_documentary",
+  "resolution": [1920, 1080],
+  "fps": 30,
+  "character": null,
+  "voice": "system",
+  "subtitle": true,
+  "duration_seconds": 600,
+  "ai_policy": "deepseek_only",
+  "steps": ["plan", "moderate", "voice", "edit", "quality"]
+}

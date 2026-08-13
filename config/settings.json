@@ -10,6 +10,13 @@
     "record_cost": true,
     "cost_per_run": 0.5
   },
+  "longform": {
+    "default_minutes": 10,
+    "max_minutes": 180,
+    "ai_policy": "deepseek_only",
+    "visual_sources": ["procedural_graphics", "kinetic_type", "diagrams", "local_media", "blender_procedural"],
+    "resume_render": true
+  },
   "video": {
     "default_topic": "AI自動生成デモ動画"
   }
