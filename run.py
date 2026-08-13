@@ -41,11 +41,14 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 
-def _factory(instruction: str, template: str | None, count: int) -> dict:
+def _factory(instruction: str, template: str | None, count: int,
+             out_dir: str | None = None) -> dict:
     from core import factory
     if count > 1:
+        if out_dir:
+            return {"ok": False, "error": "--out-dir は単一作品（--count 1）でのみ指定できます"}
         return factory.run_batch(count, instruction, template)
-    return factory.run(instruction, template)
+    return factory.run(instruction, template, out_dir=out_dir)
 
 
 def _brief(instruction: str, template: str | None) -> dict:
@@ -139,10 +142,12 @@ def main(argv: list[str] | None = None) -> int:
     pcv = sub.add_parser("create", help="一文の意図だけで完成動画を自律創作")
     pcv.add_argument("instruction")
     pcv.add_argument("--template")
+    pcv.add_argument("--out-dir", help="再開可能な固定出力ディレクトリ")
 
     plf = sub.add_parser("longform", help="DeepSeekだけをAIに使う横型長尺作品")
     plf.add_argument("instruction")
     plf.add_argument("--minutes", type=float, default=10)
+    plf.add_argument("--out-dir", help="再開可能な固定出力ディレクトリ")
 
     pbf = sub.add_parser("brief", help="動画を作らずAI作品設計・絵コンテを確認")
     pbf.add_argument("instruction")
@@ -156,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     pf.add_argument("instruction")
     pf.add_argument("--template")
     pf.add_argument("--count", type=int, default=1)
+    pf.add_argument("--out-dir", help="単一作品の固定出力ディレクトリ")
 
     ps = sub.add_parser("studio", help="トラック指定で動画生成")
     ps.add_argument("track")
@@ -218,15 +224,16 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     if args.cmd == "create":
-        r = _factory(args.instruction, args.template, 1)
+        r = _factory(args.instruction, args.template, 1, args.out_dir)
     elif args.cmd == "longform":
-        r = _factory(f"{args.instruction}。横型長尺、{args.minutes:g}分", "longform_documentary", 1)
+        r = _factory(f"{args.instruction}。横型長尺、{args.minutes:g}分",
+                     "longform_documentary", 1, args.out_dir)
     elif args.cmd == "brief":
         r = _brief(args.instruction, args.template)
     elif args.cmd == "revise":
         r = _revise(args.plan, args.feedback)
     elif args.cmd == "factory":
-        r = _factory(args.instruction, args.template, args.count)
+        r = _factory(args.instruction, args.template, args.count, args.out_dir)
     elif args.cmd == "studio":
         r = _studio_run(args.track, args.instruction, args.count)
     elif args.cmd == "tracks":

@@ -176,6 +176,9 @@ def run(instruction: str, template: str | None = None,
     label:   プロジェクトIDに付与する識別子（トラックID等）。状況を追いやすくする。
     """
     ensure_dirs()
+    # AIFunRun本体が一元管理する大型ツールを、旧来のshutil.which利用箇所にも公開する。
+    from . import tooling
+    tooling.activate(("ffmpeg", "ffprobe", "blender", "openscad", "freecadcmd", "piper"))
     cfg = _settings()
     timeout = float(cfg.get("timeout_seconds", 90))
     retries = int(cfg.get("retries", 1))
