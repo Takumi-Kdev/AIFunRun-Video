@@ -31,8 +31,9 @@ def test_openscad_generic_is_valid():
     assert "translate" in code
 
 
-def test_render_openscad_fallback():
+def test_render_openscad_fallback(monkeypatch):
     # openscad 未導入でもスクリプトを保存し graceful な結果を返す
+    monkeypatch.setattr(cad, "_which", lambda _cmd: False)
     ok, msg = cad.render_openscad(cad.build_openscad("歯車"), "/tmp/_cad_test.stl")
     assert ok is False  # 未導入ならエラー
     assert "openscad" in msg
@@ -49,7 +50,8 @@ def test_freecad_script():
 
 # ---- CAD tool ----
 
-def test_cad_tool_generates_script():
+def test_cad_tool_generates_script(monkeypatch):
+    monkeypatch.setattr(cad, "_which", lambda _cmd: False)
     t = cad.CadTool()
     r = t.run(action="openscad_generate", prompt="歯車", out="/tmp/_g.stl")
     assert r.ok is False  # openscad 未導入 → スクリプトは生成される
@@ -97,3 +99,29 @@ def test_build_asset_cad():
     res = model_router.build_asset("歯車", tool="cad", out_dir="/tmp/_cad_build")
     assert res["tool"] == "cad"
     assert res["engine"] == "openscad"
+
+
+def test_build_asset_explicit_cad_backend(monkeypatch):
+    class Result:
+        ok = True
+        error = ""
+        data = {"stl": "model.stl"}
+        artifacts = ["model.stl"]
+
+    class Registry:
+        def __init__(self):
+            self.calls = []
+
+        def call(self, name, **kwargs):
+            self.calls.append((name, kwargs))
+            return Result()
+
+    registry = Registry()
+    monkeypatch.setattr("engines.bootstrap", lambda: registry)
+
+    for backend, action in (("openscad", "openscad_generate"), ("freecad", "freecad_generate")):
+        result = model_router.build_asset("diagnostic", tool=backend, out_dir="output/test")
+        assert result["ok"] is True
+        assert result["tool"] == "cad"
+        assert result["engine"] == backend
+        assert registry.calls[-1][1]["action"] == action

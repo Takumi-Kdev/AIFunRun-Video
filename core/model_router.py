@@ -9,6 +9,9 @@ route(prompt) で判定 → build_asset(prompt) で該当エンジンを呼ぶ�
 """
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
 CAD_KEYS = [
     "歯車", "ギア", "gear", "cog", "筐体", "箱", "ブラケット", "box", "case", "bracket",
     "enclosure", "花瓶", "vase", "ノブ", "knob", "取手", "handle", "精密", "部品", "パーツ",
@@ -31,7 +34,12 @@ def route(prompt: str) -> dict:
 
 def build_asset(prompt: str, tool: str | None = None, out_dir: str = "output/cad") -> dict:
     """判定に基づき、最適なモデリングエンジンを呼んで3D資産を生成する。"""
-    r = route(prompt) if tool is None else {"tool": tool, "engine": None, "reason": "明示指定"}
+    if tool is None:
+        r = route(prompt)
+    elif tool in ("openscad", "freecad"):
+        r = {"tool": "cad", "engine": tool, "reason": "明示指定"}
+    else:
+        r = {"tool": tool, "engine": None, "reason": "明示指定"}
     from engines import bootstrap
     reg = bootstrap()
 
@@ -45,7 +53,6 @@ def build_asset(prompt: str, tool: str | None = None, out_dir: str = "output/cad
             "artifacts": res.artifacts,
         }
     if r["tool"] == "gen3d":
-        from pathlib import Path
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         # 画像未指定時はフォールバック（gen3d は画像前提）。プレースホルダ/計画を返す。
         res = reg.call("gen3d", action="generate", image="", topic=prompt, out_dir=out_dir)
@@ -53,6 +60,35 @@ def build_asset(prompt: str, tool: str | None = None, out_dir: str = "output/cad
             "ok": bool(res.ok), "tool": "gen3d", "engine": None,
             "detail": (res.error or "3D再構成"), "artifacts": res.artifacts,
         }
-    # Blender: シーン演出は scene 工程で生成（ここでは準備を返す）
-    return {"ok": True, "tool": "blender", "engine": None,
-            "detail": "Blenderシーン生成（scene工程）", "artifacts": []}
+    # Blender: プロシージャルシーンを実際の .blend 資産として保存する。
+    target = Path(out_dir)
+    target.mkdir(parents=True, exist_ok=True)
+    script_path = target / "blender_asset.py"
+    blend_path = (target / "asset.blend").resolve()
+    from engines import scene as scene_engine
+
+    code = scene_engine.build_scene(prompt, out=str((target / "preview.mp4").resolve()))
+    # 資産工程ではシーン構築だけを行う。末尾の動画レンダーは後続stationが担当する。
+    code = code.rsplit("bpy.context.scene.render.resolution_x", 1)[0]
+    code += f"\nimport bpy\nbpy.ops.wm.save_as_mainfile(filepath={str(blend_path)!r})\n"
+    script_path.write_text(code, encoding="utf-8")
+    blender = shutil.which("blender")
+    if not blender:
+        return {
+            "ok": False, "tool": "blender", "engine": None,
+            "detail": "Blender CLI未検出（生成スクリプトは保存済み）",
+            "artifacts": [str(script_path)],
+        }
+    from core import process
+
+    result = process.run_command(
+        [blender, "--background", "--python", str(script_path.resolve())],
+        timeout_ms=180000, max_output_bytes=300_000, kill_process_tree=True,
+    )
+    ok = result.ok and blend_path.exists()
+    artifacts = [str(script_path)] + ([str(blend_path)] if blend_path.exists() else [])
+    return {
+        "ok": ok, "tool": "blender", "engine": None,
+        "detail": str(blend_path) if ok else (result.error or "Blender資産生成失敗"),
+        "artifacts": artifacts,
+    }

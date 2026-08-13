@@ -59,16 +59,23 @@ def types() -> list[str]:
 def _render_tail(out: str, resolution: tuple[int, int], fps: int, frames: int) -> str:
     w, h = resolution
     return (
+        "import os, shutil, subprocess, tempfile\n"
         "bpy.context.scene.render.resolution_x = {w}\n"
         "bpy.context.scene.render.resolution_y = {h}\n"
         "bpy.context.scene.render.fps = {fps}\n"
-        "bpy.context.scene.render.image_settings.file_format = 'FFMPEG'\n"
-        "bpy.context.scene.render.ffmpeg.format = 'MPEG4'\n"
-        "bpy.context.scene.render.ffmpeg.codec = 'H264'\n"
-        f"bpy.context.scene.render.filepath = {repr(out)}\n"
+        "bpy.context.scene.render.image_settings.file_format = 'PNG'\n"
+        f"_aifunrun_out = {repr(out)}\n"
+        "_aifunrun_frames = tempfile.mkdtemp(prefix='aifunrun_blender_')\n"
+        "bpy.context.scene.render.filepath = os.path.join(_aifunrun_frames, 'frame_')\n"
         "bpy.context.scene.frame_start = 1\n"
         f"bpy.context.scene.frame_end = {frames}\n"
         "bpy.ops.render.render(animation=True, write_still=False)\n"
+        "_aifunrun_ffmpeg = shutil.which('ffmpeg')\n"
+        "if _aifunrun_ffmpeg:\n"
+        "    subprocess.run([_aifunrun_ffmpeg, '-y', '-framerate', str(bpy.context.scene.render.fps), '-i', os.path.join(_aifunrun_frames, 'frame_%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', _aifunrun_out], check=True)\n"
+        "    shutil.rmtree(_aifunrun_frames, ignore_errors=True)\n"
+        "else:\n"
+        "    print('ffmpeg_not_found; frames=' + _aifunrun_frames)\n"
         "print('scene_render_done')"
     ).format(w=w, h=h, fps=fps, frames=frames)
 
@@ -98,6 +105,7 @@ def _build_abstract(prompt, out, resolution, fps, frames, seed) -> str:
         "# --- scene: abstract_3d ---\n",
         "bpy.ops.wm.read_factory_settings(use_empty=True)\n",
         "bpy.context.scene.render.engine = 'CYCLES'\n",
+        "if bpy.context.scene.world is None: bpy.context.scene.world = bpy.data.worlds.new('World')\n",
         "bpy.context.scene.world.use_nodes = True\n",
         "bg = bpy.context.scene.world.node_tree.nodes['Background']\n",
         "bg.inputs[0].default_value = (0.02, 0.02, 0.05, 1.0)\n",
@@ -158,6 +166,7 @@ def _build_low_poly_world(prompt, out, resolution, fps, frames, seed) -> str:
         "# --- scene: low_poly_world ---\n",
         "bpy.ops.wm.read_factory_settings(use_empty=True)\n",
         "bpy.context.scene.render.engine = 'CYCLES'\n",
+        "if bpy.context.scene.world is None: bpy.context.scene.world = bpy.data.worlds.new('World')\n",
         "bpy.context.scene.world.use_nodes = True\n",
         "bg = bpy.context.scene.world.node_tree.nodes['Background']\n",
         "bg.inputs[0].default_value = (0.55, 0.75, 1.0, 1.0)\n",
@@ -200,6 +209,7 @@ def _build_product_showcase(prompt, out, resolution, fps, frames, seed) -> str:
         "# --- scene: product_showcase ---\n",
         "bpy.ops.wm.read_factory_settings(use_empty=True)\n",
         "bpy.context.scene.render.engine = 'CYCLES'\n",
+        "if bpy.context.scene.world is None: bpy.context.scene.world = bpy.data.worlds.new('World')\n",
         "bpy.context.scene.world.use_nodes = True\n",
         "bg = bpy.context.scene.world.node_tree.nodes['Background']\n",
         "bg.inputs[0].default_value = (0.04, 0.04, 0.06, 1.0)\n",
@@ -243,6 +253,7 @@ def _build_tech_abstract(prompt, out, resolution, fps, frames, seed) -> str:
         "# --- scene: tech_abstract ---\n",
         "bpy.ops.wm.read_factory_settings(use_empty=True)\n",
         "bpy.context.scene.render.engine = 'CYCLES'\n",
+        "if bpy.context.scene.world is None: bpy.context.scene.world = bpy.data.worlds.new('World')\n",
         "bpy.context.scene.world.use_nodes = True\n",
         "bg = bpy.context.scene.world.node_tree.nodes['Background']\n",
         "bg.inputs[0].default_value = (0.01, 0.01, 0.02, 1.0)\n",

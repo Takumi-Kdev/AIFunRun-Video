@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from .paths import ensure_dirs
@@ -24,7 +25,21 @@ JP_VOICES = [
 
 
 def _find_piper() -> str | None:
-    return shutil.which("piper")
+    found = shutil.which("piper")
+    if found:
+        return found
+    sibling = Path(sys.executable).resolve().parent / ("piper.exe" if sys.platform == "win32" else "piper")
+    return str(sibling) if sibling.exists() else None
+
+
+def _windows_sapi_available() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        import pyttsx3  # noqa: F401
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _find_voice() -> tuple[Path, Path] | None:
@@ -43,6 +58,7 @@ def available() -> dict:
         "piper": bool(_find_piper()),
         "espeak_ng": bool(shutil.which("espeak-ng") or shutil.which("espeak")),
         "voice": bool(_find_voice()),
+        "windows_sapi": _windows_sapi_available(),
     }
 
 
@@ -52,9 +68,41 @@ def synthesize(text: str, out_wav: Path) -> str | None:
     piper = _find_piper()
     if piper and _find_voice():
         return _synthesize_piper(piper, text, out_wav)
+    if _windows_sapi_available():
+        sapi_result = _synthesize_windows_sapi(text, out_wav)
+        if sapi_result:
+            return sapi_result
     espeak = shutil.which("espeak-ng") or shutil.which("espeak")
     if espeak:
         return _synthesize_espeak(espeak, text, out_wav)
+    return None
+
+
+def _synthesize_windows_sapi(text: str, out_wav: Path) -> str | None:
+    """Windows標準の日本語音声を使い、ネット接続なしでWAVを生成する。"""
+    try:
+        import pyttsx3
+
+        engine = pyttsx3.init("sapi5")
+        voices = engine.getProperty("voices") or []
+        preferred = next(
+            (
+                voice
+                for voice in voices
+                if "haruka" in f"{getattr(voice, 'name', '')} {getattr(voice, 'id', '')}".lower()
+                or "ja-jp" in f"{getattr(voice, 'languages', '')}".lower()
+            ),
+            None,
+        )
+        if preferred is not None:
+            engine.setProperty("voice", preferred.id)
+        engine.save_to_file(text, str(out_wav))
+        engine.runAndWait()
+        engine.stop()
+        if out_wav.exists() and out_wav.stat().st_size > 44:
+            return str(out_wav)
+    except Exception:  # noqa: BLE001
+        pass
     return None
 
 

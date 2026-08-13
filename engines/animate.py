@@ -32,6 +32,7 @@ def build_scene_setup(engine: str = ENGINE, bg_color: str = "0.05 0.06 0.09") ->
         "import bpy\n"
         "# --- animate: シーン初期化 ---\n"
         f"bpy.context.scene.render.engine = '{engine}'\n"
+        "if bpy.context.scene.world is None: bpy.context.scene.world = bpy.data.worlds.new('World')\n"
         "bpy.context.scene.world.use_nodes = True\n"
         "bg = bpy.context.scene.world.node_tree.nodes['Background']\n"
         f"bg.inputs[0].default_value = ({rgb}, 1.0)\n"
