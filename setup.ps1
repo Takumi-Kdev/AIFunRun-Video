@@ -24,9 +24,15 @@ if (-not (Test-Path ".venv\Scripts\python.exe")) {
 
 # 3) .env 雛形
 Write-Host "[3/4] .env 準備"
+New-Item -ItemType Directory -Force -Path "config\credentials" | Out-Null
 if (-not (Test-Path "config\credentials\.env")) {
-    Copy-Item "config\credentials\.env.example" "config\credentials\.env"
-    Write-Host "      .env を生成 → キーを記入（任意。無くてもルール生成で動作）"
+    if (Test-Path "config\credentials\.env.example") {
+        Copy-Item "config\credentials\.env.example" "config\credentials\.env"
+        Write-Host "      .env を生成 → キーを記入（任意。無くてもルール生成で動作）"
+    } else {
+        Set-Content -Path "config\credentials\.env" -Value "# AIFunRun-Video 秘密情報`n# DEEPSEEK_API_KEY=`n# BLENDER_HOST=`n# BLENDER_PORT=`n"
+        Write-Host "      .env.example が無いため空の .env を生成"
+    }
 } else {
     Write-Host "      .env は既にあります"
 }
