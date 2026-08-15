@@ -43,6 +43,9 @@ def _platform(text: str, vertical: bool) -> str:
 
 def _topic(text: str) -> str:
     cleaned = re.sub(r"(?:動画|ショート|映像)を?(?:作って|創って|制作して|生成して)", "", text)
+    cleaned = re.sub(r"\d+\s*秒(?:程度|前後)?の?", "", cleaned)
+    cleaned = re.sub(r"(?:縦型|横型|スクエア)(?:ショート|動画)?", "", cleaned)
+    cleaned = re.sub(r"(?:を|について)?(?:紹介|解説)(?:します|する)?$", "", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" 、。『』\"'")
     return (cleaned or text.strip() or "伝えたいテーマ")[:120]
 
@@ -55,14 +58,14 @@ def _fallback_plan(instruction: str, template: dict) -> dict:
     shot_count = max(4, min(8, round(duration / 4)))
     beat_duration = round(duration / shot_count, 2)
     narratives = [
-        f"まだ、{topic}を普通に見ていますか？",
-        f"本質は、見えているものの少し先にあります。",
-        f"まず変えるべきなのは、方法ではなく視点です。",
-        f"小さな違いが、結果を大きく分けます。",
-        f"いま選ぶ一歩が、次の景色を作ります。",
-        f"{topic}を、今日から自分の力に変えましょう。",
-        "続きが必要なら、ここから一緒に進めます。",
-        "次の時代は、もう始まっています。",
+        f"今回は「{topic}」を{int(duration)}秒で解説します。",
+        "結論から言うと、大切なのは小さく始めることです。",
+        "1つ目、目的を1行に絞ります。",
+        "2つ目、毎日1つだけ実行します。",
+        "3つ目、数字を見て改善を繰り返します。",
+        f"この3ステップで「{topic}」は確実に前に進みます。",
+        "詳しい手順は次回の動画で解説します。",
+        "フォローして次の動画をお待ちください。",
     ]
     purposes = ["pattern_interrupt", "promise", "context", "proof", "turn", "payoff", "cta", "afterglow"]
     cameras = ["macro push-in", "slow orbit", "parallax drift", "top-down reveal", "dolly through", "locked hero", "pull-back", "fade to symbol"]
